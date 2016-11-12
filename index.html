@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Parallel Hexagonal Cellular Automaton Framework by asegizek</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Parallel Hexagonal Cellular Automaton Framework</h1>
+      <h2 class="project-tagline"></h2>
+      <a href="https://github.com/asegizek/418-Final-Project" class="btn">View on GitHub</a>
+      <a href="https://github.com/asegizek/418-Final-Project/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/asegizek/418-Final-Project/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h2>
+<a id="project-proposal" class="anchor" href="#project-proposal" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Project Proposal</h2>
+
+<p><img src="https://upload.wikimedia.org/wikipedia/commons/8/86/Oscillator.gif" alt="">
+<img src="http://www.sheawong.com/wp-content/uploads/2013/08/keephatin.gif" alt="Alt Text"></p>
+
+<h3>
+<a id="summary" class="anchor" href="#summary" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Summary</h3>
+
+<p>We are going to make a parallel cellular automaton framework for hexagonal grids that will run on CUDA. It will be able to efficiently run cellular automata with many states and any set of rules which determine state based on a cell’s surrounding neighborhood. </p>
+
+<h3>
+<a id="background" class="anchor" href="#background" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Background</h3>
+
+<p>Cellular automata are discrete models used to simulate various processes often inspired by nature. It usually consists of a grid of cells where each cell is in one of a finite number of states. For every time step the state of each cell is updated based on a predefined rule with respect to its neighboring cells. For example in the famous Game of Life each cell in the “live” state  becomes “dead” if there are fewer than 2 live neighboring cells or more than 3 live cells. Whereas any dead cell can become live again if it is surrounded by exactly 3 live cells. These simple rules can create complex simulations. We want to extend the idea of cellular automata to something more challenging than just a square tiled grid:  a hexagonally tiled grid. This different layout provides its own sets of challenges which we will cover in the next section.</p>
+
+<h3>
+<a id="challenge" class="anchor" href="#challenge" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Challenge</h3>
+
+<p>Creating a parallel cellular automaton for a normal cartesian grid has multiple challenges, such as determining how to split up the work, handling cells at the edge of a thread’s region, or determining if there are sections of the grid where no work needs to be done. Creating a cellular automaton for a hexagonal grid includes all these challenges in addition to many more. As all of the previous parallel programs we’ve worked on so far have operated on grids of squares, working with a hexagonal grid will require different techniques than the ones we’ve used previously. Mapping a hexagonal grid to memory isn’t a clear cut task, and finding the most efficient way to do this will be necessary. In addition to this, using CUDA will have its own set of challenges as we’ll need to find the most efficient way to allocate irregularly shaped groups of hexagons between blocks and threads. Finding the best approach to take for solving these problems should prove to be an interesting exercise. </p>
+
+<h3>
+<a id="resources" class="anchor" href="#resources" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Resources</h3>
+
+<p>We will be using the gates machines with the NVIDIA GPU’s for our project. We  will code this project using C++ and we will not be using any starter code although we will probably use a third party library to render our simulations.</p>
+
+<h3>
+<a id="goals" class="anchor" href="#goals" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Goals</h3>
+
+<p>We plan to create a fast general cellular automata simulator for a hexagonal grid. We will allow an arbitrarily large number of possible cell states, and allow for a cell to change its state based on any rule which looks at the states of its neighboring cells. We are unsure of how fast we’d like our simulation to be, but it should at least be significantly faster than the serial implementation, and hopefully be on the same order of magnitude as the very advanced, professionally written cellular automaton simulator Golly. 
+If things go better than expected and we are ahead of schedule we would hope to be able to extend the framework to allow each cell to update not only based on its neighboring cells but perhaps to cells farther away, granting the framework a lot more flexibility. However if we find ourselves behind schedule then we expect ourselves to specialize our framework towards one particular cellular automaton and achieve decent speedup there.
+For the demo we plan to showcase the speedup graphs of our parallel framework and hopefully the real time simulation of our framework in action while ssh’ed to a Gates machine. However if it turns out the connection is too slow we will pre-record a video showcasing the real time simulations of both the sequential and parallel versions of various cellular automata.</p>
+
+<h3>
+<a id="platform" class="anchor" href="#platform" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Platform</h3>
+
+<p>For this project we decided to use C++ because we already know how to use it with CUDA and because we’ll be able to make use of the features C++ adds to C.</p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/asegizek/418-Final-Project">Parallel Hexagonal Cellular Automaton Framework</a> is maintained by <a href="https://github.com/asegizek">asegizek</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
