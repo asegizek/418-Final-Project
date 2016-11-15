@@ -20,7 +20,8 @@
 struct global_constants {
   int grid_width;
   int grid_height;
-  grid_elem* grid;
+  grid_elem* curr_grid;
+  grid_elem* next_grid;
 };
 
 // Global variable that is in scope, but read-only, for all cuda
@@ -49,137 +50,68 @@ __global__ void kernel_clear_grid() {
   int offset = image_y*width + image_x;
 
   // write to global memory
-  *(grid_elem*)(&global_constants.grid[offset]) = DEAD;
+  *(grid_elem*)(&global_constants.grid[offset]) = 0;
 }
 
 #define THREAD_DIMX 32
 #define THREAD_DIMY 32
 
-
-// kernelSingleCycle -- (CUDA device code)
+// kernel_single_iteration (CUDA device code)
 //
-// fill in each array of blockCircles so that it represents which circles
-// overlap with each block
-__global__ void kernalComputeLocalCircles(int *blockCircles, int arraySize) {
+// compute a single iteration on the grid, putting the results in next_grid
+__global__ void kernel_single_iteration() {
 
-    // index of this block in blockCircles
-    int blockIndex = blockIdx.y*gridDim.x + blockIdx.x;
-    // circle number of the circle this thread will deal with
-    int circleIndex = blockIdx.z*blockDim.x + threadIdx.x;
+  // cells at border are not modified
+  int image_x = blockIdx.x * blockDim.x + threadIdx.x + 1;
+  int image_y = blockIdx.y * blockDim.y + threadIdx.y + 1;
 
-    int numCircles = cuConstRendererParams.numCircles;
+  int width = const_params.grid_width;
+  int height = const_params.grid_width;
+  // index in the grid of this thread
+  int grid_index = image_y*width + image_x;
 
-    // only continue if circleIndex is valid
-    if (circleIndex < numCircles) {
+  // cells at border are not modified
+  if (image_x >= width - 1 || image_y >= height - 1)
+      return;
 
-        float3 p = *(float3*) (&cuConstRendererParams.position[circleIndex*3]);
-        float  rad = cuConstRendererParams.radius[circleIndex];
-        short imageWidth = cuConstRendererParams.imageWidth;
-        short imageHeight = cuConstRendererParams.imageHeight;
+  uint8_t live_neighbors = 0;
 
-        int minPixelX = THREAD_DIMX*blockIdx.x;
-        int maxPixelX = THREAD_DIMX*(blockIdx.x + 1);
-        int minPixelY = THREAD_DIMY*blockIdx.y;
-        int maxPixelY = THREAD_DIMY*(blockIdx.y + 1);
+  // compute the number of live_neighbors
+  // neighbors = index of {up, up-right, right, down, down-left, left}
+  int [] neighbors = {grid_index - width, grid_index - width + 1, grid_index + 1,
+                      grid_index + width, grid_index + width - 1, grid_index - 1};
 
-        // compute wether circle can intersect with the current block
-        int inRange = 1;
-        inRange = inRange &&
-            maxPixelY > static_cast<short>(imageHeight * (p.y - rad));
-        inRange = inRange &&
-            minPixelY <=  static_cast<short>(imageHeight * (p.y + rad));
-        inRange = inRange &&
-            maxPixelX > static_cast<short>(imageWidth * (p.x - rad));
-        inRange = inRange &&
-            minPixelX <=  static_cast<short>(imageWidth * (p.x + rad));
+  for (int i = 0; i < 6; i++) {
+    live_neighbors += curr_grid[neighbors[i]];
+  }
 
-        // in order to signal the last position in the array, the last
-        // circle being rendered is put into every array in blockCircles
-        inRange = inRange || (circleIndex == numCircles - 1);
-        blockCircles[blockIndex*arraySize + circleIndex] = inRange;
-    }
+  grid_elem curr_value = curr_grid[grid_index];
+  // values for the next iteration
+  grid_elem next_value;
 
+  if (!curr_value) {
+    next_value = (live_neighbors == 2);
+  } else {
+    next_value = (live_neighbors == 3 || live_neighbors == 4);
+  }
+
+  next_grid[grid_index] = next_value;
 
 }
 
-// create the keys vector
-__global__ void
-kernalComputeKeys(int *keys, int arraySize) {
 
-    // get the keys array specific to this block
-    keys += blockIdx.y*arraySize;
-    // index of this thread in the keys array
-    int index = blockIdx.x*blockDim.x + threadIdx.x;
-
-    if (index < arraySize) {
-        keys[index] = blockIdx.y;
-    }
-}
-
-__global__ void
-kernalCreateCircleList(int *blockCircles, int *blockCirclesScan,
-                        int *circleList, int arraySize) {
-    // get the arrays specific to this block
-    blockCircles += blockIdx.y*arraySize;
-    blockCirclesScan += blockIdx.y*arraySize;
-    circleList += blockIdx.y*arraySize;
-
-    // index of this thread in any of the arrays
-    int listIndex = blockIdx.x*blockDim.x + threadIdx.x;
-
-    int numCircles = cuConstRendererParams.numCircles;
-
-    if (listIndex < numCircles) {
-        if (blockCircles[listIndex]) {
-            circleList[blockCirclesScan[listIndex]] = listIndex;
-        }
-
-    }
-}
-
-////////////////////////////////////////////////
-
-
-CudaRenderer::CudaRenderer() {
-    image = NULL;
-
-    numCircles = 0;
-    position = NULL;
-    velocity = NULL;
-    color = NULL;
-    radius = NULL;
-
-    cudaDevicePosition = NULL;
-    cudaDeviceVelocity = NULL;
-    cudaDeviceColor = NULL;
-    cudaDeviceRadius = NULL;
-    cudaDeviceImageData = NULL;
+Automaton34_2::Automaton34_2() {
+  grid = NULL;
 }
 
 CudaRenderer::~CudaRenderer() {
-
-    if (image) {
-        delete image;
-    }
-
-    if (position) {
-        delete [] position;
-        delete [] velocity;
-        delete [] color;
-        delete [] radius;
-    }
-
-    if (cudaDevicePosition) {
-        cudaFree(cudaDevicePosition);
-        cudaFree(cudaDeviceVelocity);
-        cudaFree(cudaDeviceColor);
-        cudaFree(cudaDeviceRadius);
-        cudaFree(cudaDeviceImageData);
-    }
+  if (grid) {
+      delete grid;
+  }
 }
 
-const Image*
-CudaRenderer::getImage() {
+const Grid*
+CudaRenderer::getGrid(std::string filename) {
 
     // need to copy contents of the rendered image from device memory
     // before we expose the Image object to the caller

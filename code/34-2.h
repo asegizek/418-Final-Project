@@ -19,7 +19,7 @@ public:
   Automaton34_2();
   virtual ~Automaton34_2();
 
-  const Grid* getGrid();
+  const Grid* getGrid(std::string filename);
 
   void setup();
 
