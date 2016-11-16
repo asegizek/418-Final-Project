@@ -13,7 +13,10 @@ class Automaton34_2: public Automation {
 private:
 
   Grid* grid;
+  int num_iters;
 
+  grid_elem* cuda_device_grid_curr;
+  grid_elem* cuda_device_grid_next;
 public:
 
   Automaton34_2();
@@ -21,9 +24,11 @@ public:
 
   const Grid* getGrid(std::string filename);
 
-  void setup();
+  void setup(int num_of_iters);
 
-  void runAutomaton();
+  void create_grid(char *filename);
+
+  void run_automaton();
 
 };
 

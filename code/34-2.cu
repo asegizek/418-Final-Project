@@ -18,8 +18,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////
 
 struct global_constants {
-  int grid_width;
-  int grid_height;
+  int width;
+  int height;
   grid_elem* curr_grid;
   grid_elem* next_grid;
 };
@@ -53,8 +53,6 @@ __global__ void kernel_clear_grid() {
   *(grid_elem*)(&global_constants.grid[offset]) = 0;
 }
 
-#define THREAD_DIMX 32
-#define THREAD_DIMY 32
 
 // kernel_single_iteration (CUDA device code)
 //
@@ -101,269 +99,172 @@ __global__ void kernel_single_iteration() {
 
 
 Automaton34_2::Automaton34_2() {
+  num_iters = 0;
   grid = NULL;
+  cuda_device_grid_curr = NULL;
+  cuda_device_grid_next = NULL;
 }
 
-CudaRenderer::~CudaRenderer() {
+CudaRenderer::~Automaton34_2() {
   if (grid) {
-      delete grid;
+    delete grid->data;
+    delete grid;
+  }
+  if (cuda_device_grid_curr) {
+    cudaFree(cuda_device_grid_curr);
+    cudaFree(cuda_device_grid_next);
   }
 }
 
 const Grid*
-CudaRenderer::getGrid(std::string filename) {
+Automaton34_2::get_grid() {
 
-    // need to copy contents of the rendered image from device memory
-    // before we expose the Image object to the caller
+  // need to copy contents of the final grid from device memory
+  // before we expose it to the caller
 
-    printf("Copying image data from device\n");
+  printf("Copying grid data from device\n");
 
-    cudaMemcpy(image->data,
-               cudaDeviceImageData,
-               sizeof(float) * 4 * image->width * image->height,
-               cudaMemcpyDeviceToHost);
+  cudaMemcpy(grid->data,
+             cuda_device_grid_data,
+             sizeof(grid_elem) * grid->width * grid->height,
+             cudaMemcpyDeviceToHost);
 
-    return image;
+  return grid;
 }
 
 void
-CudaRenderer::loadScene(SceneName scene) {
-    sceneName = scene;
-    loadCircleScene(sceneName, numCircles, position, velocity, color, radius);
-}
+Automaton34_2::setup(int num_of_iters) {
 
-void
-CudaRenderer::setup() {
+  int deviceCount = 0;
+  bool isFastGPU = false;
+  std::string name;
+  cudaError_t err = cudaGetDeviceCount(&deviceCount);
 
-    int deviceCount = 0;
-    bool isFastGPU = false;
-    std::string name;
-    cudaError_t err = cudaGetDeviceCount(&deviceCount);
+  printf("Number of iterations: %d\n", num_iters);
+  num_iters = num_of_iters;
 
-    printf("---------------------------------------------------------\n");
-    printf("Initializing CUDA for CudaRenderer\n");
-    printf("Found %d CUDA devices\n", deviceCount);
+  printf("---------------------------------------------------------\n");
+  printf("Initializing CUDA for CudaRenderer\n");
+  printf("Found %d CUDA devices\n", deviceCount);
 
-    for (int i=0; i<deviceCount; i++) {
-        cudaDeviceProp deviceProps;
-        cudaGetDeviceProperties(&deviceProps, i);
-        name = deviceProps.name;
-        if (name.compare("GeForce GTX 480") == 0
-            || name.compare("GeForce GTX 670") == 0
-            || name.compare("GeForce GTX 780") == 0)
-        {
-            isFastGPU = true;
-        }
-
-        printf("Device %d: %s\n", i, deviceProps.name);
-        printf("   SMs:        %d\n", deviceProps.multiProcessorCount);
-        printf("   Global mem: %.0f MB\n", static_cast<float>(deviceProps.totalGlobalMem) / (1024 * 1024));
-        printf("   CUDA Cap:   %d.%d\n", deviceProps.major, deviceProps.minor);
-    }
-    printf("---------------------------------------------------------\n");
-    if (!isFastGPU)
+  for (int i=0; i<deviceCount; i++) {
+    cudaDeviceProp deviceProps;
+    cudaGetDeviceProperties(&deviceProps, i);
+    name = deviceProps.name;
+    if (name.compare("GeForce GTX 480") == 0
+        || name.compare("GeForce GTX 670") == 0
+        || name.compare("GeForce GTX 780") == 0)
     {
-        printf("WARNING: "
-               "You're not running on a fast GPU, please consider using "
-               "NVIDIA GTX 480, 670 or 780.\n");
-        printf("---------------------------------------------------------\n");
+      isFastGPU = true;
     }
 
-    // By this time the scene should be loaded.  Now copy all the key
-    // data structures into device memory so they are accessible to
-    // CUDA kernels
-    //
-    // See the CUDA Programmer's Guide for descriptions of
-    // cudaMalloc and cudaMemcpy
+    printf("Device %d: %s\n", i, deviceProps.name);
+    printf("   SMs:        %d\n", deviceProps.multiProcessorCount);
+    printf("   Global mem: %.0f MB\n", static_cast<float>(deviceProps.totalGlobalMem) / (1024 * 1024));
+    printf("   CUDA Cap:   %d.%d\n", deviceProps.major, deviceProps.minor);
 
-    cudaMalloc(&cudaDevicePosition, sizeof(float) * 3 * numCircles);
-    cudaMalloc(&cudaDeviceVelocity, sizeof(float) * 3 * numCircles);
-    cudaMalloc(&cudaDeviceColor, sizeof(float) * 3 * numCircles);
-    cudaMalloc(&cudaDeviceRadius, sizeof(float) * numCircles);
-    cudaMalloc(&cudaDeviceImageData, sizeof(float) * 4 * image->width * image->height);
+  intf("---------------------------------------------------------\n");
+   (!isFastGPU)
 
-    cudaMemcpy(cudaDevicePosition, position, sizeof(float) * 3 * numCircles, cudaMemcpyHostToDevice);
-    cudaMemcpy(cudaDeviceVelocity, velocity, sizeof(float) * 3 * numCircles, cudaMemcpyHostToDevice);
-    cudaMemcpy(cudaDeviceColor, color, sizeof(float) * 3 * numCircles, cudaMemcpyHostToDevice);
-    cudaMemcpy(cudaDeviceRadius, radius, sizeof(float) * numCircles, cudaMemcpyHostToDevice);
+    printf("WARNING: "
+           "You're not running on a fast GPU, please consider using "
+           "NVIDIA GTX 480, 670 or 780.\n");
+    printf("---------------------------------------------------------\n");
+  }
 
-    // Initialize parameters in constant memory.  We didn't talk about
-    // constant memory in class, but the use of read-only constant
-    // memory here is an optimization over just sticking these values
-    // in device global memory.  NVIDIA GPUs have a few special tricks
-    // for optimizing access to constant memory.  Using global memory
-    // here would have worked just as well.  See the Programmer's
-    // Guide for more information about constant memory.
+  // By this time the scene should be loaded.  Now copy all the key
+  // data structures into device memory so they are accessible to
+  // CUDA kernels
 
-    GlobalConstants params;
-    params.sceneName = sceneName;
-    params.numCircles = numCircles;
-    params.imageWidth = image->width;
-    params.imageHeight = image->height;
-    params.position = cudaDevicePosition;
-    params.velocity = cudaDeviceVelocity;
-    params.color = cudaDeviceColor;
-    params.radius = cudaDeviceRadius;
-    params.imageData = cudaDeviceImageData;
+  cudaMalloc(&cuda_device_grid_curr, sizeof(grid_elem) * grid->width * grid->height);
+  cudaMalloc(&cuda_device_grid_next, sizeof(grid_elem) * grid->width * grid->height);
 
-    cudaMemcpyToSymbol(cuConstRendererParams, &params, sizeof(GlobalConstants));
+  cudaMemcpy(&cuda_device_grid_curr, grid->data,
+              sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyHostToDevice);
+  cudaMemset(&cuda_device_grid_next, 0, sizeof(grid_elem) * grid->width * grid->height);
 
-    // also need to copy over the noise lookup tables, so we can
-    // implement noise on the GPU
-    int* permX;
-    int* permY;
-    float* value1D;
-    getNoiseTables(&permX, &permY, &value1D);
-    cudaMemcpyToSymbol(cuConstNoiseXPermutationTable, permX, sizeof(int) * 256);
-    cudaMemcpyToSymbol(cuConstNoiseYPermutationTable, permY, sizeof(int) * 256);
-    cudaMemcpyToSymbol(cuConstNoise1DValueTable, value1D, sizeof(float) * 256);
+  // Initialize parameters in constant memory.
+  global_constants params;
+  params.height = grid->height;
+  params.width = grid->width;
+  params.curr_grid = cuada_device_grid_curr;
+  params.next_grid = cuada_device_grid_next;
 
-    // last, copy over the color table that's used by the shading
-    // function for circles in the snowflake demo
-
-    float lookupTable[COLOR_MAP_SIZE][3] = {
-        {1.f, 1.f, 1.f},
-        {1.f, 1.f, 1.f},
-        {.8f, .9f, 1.f},
-        {.8f, .9f, 1.f},
-        {.8f, 0.8f, 1.f},
-    };
-
-    cudaMemcpyToSymbol(cuConstColorRamp, lookupTable, sizeof(float) * 3 * COLOR_MAP_SIZE);
-
+  cudaMemcpyToSymbol(const_params, &params, sizeof(globa_constants));
 }
 
-// allocOutputImage --
-//
-// Allocate buffer the renderer will render into.  Check status of
-// image first to avoid memory leak.
+
+// create the initial grid using the input file
 void
-CudaRenderer::allocOutputImage(int width, int height) {
+Automaton34_2::create_grid(char *filename) {
 
-    if (image)
-        delete image;
-    image = new Image(width, height);
-}
+  FILE *input = NULL;
+  int width, height;
+  grid_elem *data;
 
-// clearImage --
-//
-// Clear's the renderer's target image.  The state of the image after
-// the clear depends on the scene being rendered.
-void
-CudaRenderer::clearImage() {
+  input = fopen(filename, "r");
+  if (!input) {
+    printf("Unable to open file: %s\n", filename);
+    printf("\nTerminating program\n");
+    exit(1);
+  }
 
-    // 256 threads per block is a healthy number
-    dim3 blockDim(16, 16, 1);
-    dim3 gridDim(
-        (image->width + blockDim.x - 1) / blockDim.x,
-        (image->height + blockDim.y - 1) / blockDim.y);
+  // copy in width and height from file
+  if (fscanf(input, "%d %d\n", &width, &height) != 2) {
+    fclose(input);
+    printf("Invalid input\n");
+    printf("\nTerminating program\n");
+    exit(1);
+  }
 
-    if (sceneName == SNOWFLAKES || sceneName == SNOWFLAKES_SINGLE_FRAME) {
-        kernelClearImageSnowflake<<<gridDim, blockDim>>>();
-    } else {
-        kernelClearImage<<<gridDim, blockDim>>>(1.f, 1.f, 1.f, 1.f);
+  printf("Width: %d\nHeight: %d\n", width, height);
+
+  // increase grid size to account for border cells
+  width += 2;
+  height += 2;
+  data = new grid_elem [width*height];
+
+  // insert data from file into grid
+  for (int y = 1; y < height - 1; y++) {
+    for (int x = 1; x < width - 1; x++) {
+      int temp;
+      if (fscanf(input, "%d", &temp) != 1) {
+        fclose(input);
+        printf("Invalid input\n");
+        printf("\nTerminating program\n");
+        exit(1);
+      }
+
+      data[width*y + x] = (grid_elem)temp;
     }
+  }
+
+  fclose(input);
+
+  grid = new grid(width, height);
+  grid->data = data
+}
+
+#define THREAD_DIMX 32
+#define THREAD_DIMY 32
+
+void
+Automaton34_2::run_automaton() {
+
+  // number of threads needed in the x and y directions
+  // note that this is less than the width/height due to the border of unmodified cells
+  int width_cells = image->width - 2;
+  int height_cells = image->height - 2;
+
+  // block/grid size for the pixel kernal
+  dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
+  dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
+              (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
+
+  for (int iter = 0; iter < num_iters; iter++) {
+    kernal_single_iteration<<<cell_grid_dim, cell_block_dim>>>;
     cudaThreadSynchronize();
-}
-
-// advanceAnimation --
-//
-// Advance the simulation one time step.  Updates all circle positions
-// and velocities
-void
-CudaRenderer::advanceAnimation() {
-     // 256 threads per block is a healthy number
-    dim3 blockDim(256, 1);
-    dim3 gridDim((numCircles + blockDim.x - 1) / blockDim.x);
-
-    // only the snowflake scene has animation
-    if (sceneName == SNOWFLAKES) {
-        kernelAdvanceSnowflake<<<gridDim, blockDim>>>();
-    } else if (sceneName == BOUNCING_BALLS) {
-        kernelAdvanceBouncingBalls<<<gridDim, blockDim>>>();
-    } else if (sceneName == HYPNOSIS) {
-        kernelAdvanceHypnosis<<<gridDim, blockDim>>>();
-    } else if (sceneName == FIREWORKS) {
-        kernelAdvanceFireWorks<<<gridDim, blockDim>>>();
-    }
-    cudaThreadSynchronize();
-}
-
-void
-CudaRenderer::render() {
-
-    // block/grid size for the pixel kernal
-    dim3 pixelBlockDim(THREAD_DIMX, THREAD_DIMY);
-    dim3 pixelGridDim((image->width + pixelBlockDim.x - 1) / pixelBlockDim.x,
-                (image->height + pixelBlockDim.y - 1) / pixelBlockDim.y);
-
-    // size of each circle array
-    int arraySize = numCircles;
-
-    // skip parts of the implementation if there aren't many circles
-    int quick = (numCircles < 30);
-
-    // initialize blockCircles so it has enough space to hold each array
-    int numBlocks = pixelGridDim.x*pixelGridDim.y;
-
-    if (!quick) {
-        // contains the arrays of circles which can overlap with each block
-        thrust::device_ptr<int> blockCircles =
-            thrust::device_malloc<int>(numBlocks*arraySize);
-        // will contain the exclusive scan of blockCircles
-        thrust::device_ptr<int> blockCirclesScan =
-            thrust::device_malloc<int>(numBlocks*arraySize);
-        // contains keys for the exclusive scan
-        thrust::device_ptr<int> keys =
-            thrust::device_malloc<int>(numBlocks*arraySize);
-        // will contain arrays of all circles that overlap with each block
-        thrust::device_ptr<int> circleList =
-            thrust::device_malloc<int>(numBlocks*arraySize);
-
-        // block/gird size for setting up blockCircles
-        dim3 circleBlockDim(512);
-        dim3 circleGridDim(pixelGridDim.x, pixelGridDim.y,
-                (numCircles + circleBlockDim.x - 1) / circleBlockDim.x);
-
-        // fill in each array of blockCircles so that it represents which
-        // circles overlap with each block
-        kernalComputeLocalCircles<<<circleGridDim, circleBlockDim>>>
-                (blockCircles.get(), arraySize);
-        cudaThreadSynchronize();
-
-        // block/gird size for setting up keys
-        dim3 keyBlockDim(512);
-        dim3 keyGridDim((arraySize + keyBlockDim.x - 1)/keyBlockDim.x,
-                numBlocks);
-
-        // create the keys vector
-        kernalComputeKeys<<<keyGridDim, keyBlockDim>>>(keys.get(), arraySize);
-
-        thrust::exclusive_scan_by_key(keys, keys+arraySize*numBlocks,
-                blockCircles, blockCirclesScan);
-
-        // block/gird size for circleList
-        dim3 listBlockDim(512);
-        dim3 listGridDim((numCircles + listBlockDim.x - 1) / listBlockDim.x,
-                numBlocks);
-
-        // fill in circeList
-        kernalCreateCircleList<<<listGridDim, listBlockDim>>>
-            (blockCircles.get(), blockCirclesScan.get(),
-             circleList.get(), arraySize);
-        cudaThreadSynchronize();
-
-        // shade the pixels based on which circles overlap with them
-        kernelRenderPixels<<<pixelGridDim, pixelBlockDim>>>
-            (circleList.get(), arraySize);
-
-        cudaThreadSynchronize();
-        thrust::device_free(circleList);
-        thrust::device_free(keys);
-        thrust::device_free(blockCirclesScan);
-        thrust::device_free(blockCircles);
-    } else {
-        kernelRenderSmall<<<pixelGridDim, pixelBlockDim>>>();
-        cudaThreadSynchronize();
-    }
+    cudaMemcpy(&cuda_device_grid_curr, &cuda_device_grid_next,
+      sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
+  }
 }
