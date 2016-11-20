@@ -124,7 +124,7 @@ Automaton34_2::get_grid() {
   printf("Copying grid data from device\n");
 
   cudaMemcpy(grid->data,
-             &cuda_device_grid_curr,
+             cuda_device_grid_curr,
              sizeof(grid_elem) * grid->width * grid->height,
              cudaMemcpyDeviceToHost);
 
@@ -179,9 +179,9 @@ Automaton34_2::setup(int num_of_iters) {
   cudaMalloc(&cuda_device_grid_curr, sizeof(grid_elem) * grid->width * grid->height);
   cudaMalloc(&cuda_device_grid_next, sizeof(grid_elem) * grid->width * grid->height);
 
-  cudaMemcpy(&cuda_device_grid_curr, grid->data,
+  cudaMemcpy(cuda_device_grid_curr, grid->data,
               sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyHostToDevice);
-  cudaMemset(&cuda_device_grid_next, 0, sizeof(grid_elem) * grid->width * grid->height);
+  cudaMemset(cuda_device_grid_next, 0, sizeof(grid_elem) * grid->width * grid->height);
 
   // Initialize parameters in constant memory.
   global_constants params;
@@ -264,7 +264,7 @@ Automaton34_2::run_automaton() {
   for (int iter = 0; iter < num_iters; iter++) {
     kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>();
     cudaThreadSynchronize();
-    cudaMemcpy(&cuda_device_grid_curr, &cuda_device_grid_next,
+    cudaMemcpy(cuda_device_grid_curr, cuda_device_grid_next,
       sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
   }
 }
