@@ -1,7 +1,8 @@
+#include <stdint.h>
 #ifndef  __GRID_H__
 #define  __GRID_H__
 
-typedef grid_elem uint8_t;
+typedef uint8_t grid_elem;
 
 struct Grid {
 

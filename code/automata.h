@@ -1,19 +1,19 @@
 #ifndef __AUTOMATA__
 #define __AUTOMATA__
 
-
+#include "grid.h"
 
 class Automaton {
 
 public:
 
-    virtual ~Automaton() { };
+    ~Automaton() { };
 
-    virtual const Grid* getGrid() = 0;
+    Grid* get_grid();
 
-    virtual void setup() = 0;
+    void setup();
 
-    virtual void runAutomaton() = 0;
+    void runAutomaton();
 
     //virtual void dumpParticles(const char* filename) {}
 

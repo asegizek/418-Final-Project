@@ -1,5 +1,5 @@
-#ifndef __AUTOMATON_34-2__
-#define __AUTOMATON_34-2__
+#ifndef __AUTOMATON_34_2__
+#define __AUTOMATON_34_2__
 
 #ifndef uint
 #define uint unsigned int
@@ -8,21 +8,21 @@
 #include "automata.h"
 
 
-class Automaton34_2: public Automation {
+class Automaton34_2: public Automaton {
 
-private:
 
+public:
   Grid* grid;
   int num_iters;
 
   grid_elem* cuda_device_grid_curr;
   grid_elem* cuda_device_grid_next;
-public:
+
 
   Automaton34_2();
   virtual ~Automaton34_2();
 
-  const Grid* getGrid(std::string filename);
+  Grid* get_grid();
 
   void setup(int num_of_iters);
 

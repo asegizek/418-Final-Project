@@ -9,8 +9,7 @@
 #include <cuda_runtime.h>
 #include <driver_functions.h>
 
-#include "cudaRenderer.h"
-#include "grid.h"
+#include "34-2.h"
 #include "util.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -18,8 +17,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////
 
 struct global_constants {
-  int width;
-  int height;
+  int grid_width;
+  int grid_height;
   grid_elem* curr_grid;
   grid_elem* next_grid;
 };
@@ -50,7 +49,7 @@ __global__ void kernel_clear_grid() {
   int offset = image_y*width + image_x;
 
   // write to global memory
-  *(grid_elem*)(&global_constants.grid[offset]) = 0;
+  const_params.curr_grid[offset] = 0;
 }
 
 
@@ -76,14 +75,14 @@ __global__ void kernel_single_iteration() {
 
   // compute the number of live_neighbors
   // neighbors = index of {up, up-right, right, down, down-left, left}
-  int [] neighbors = {grid_index - width, grid_index - width + 1, grid_index + 1,
+  int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
                       grid_index + width, grid_index + width - 1, grid_index - 1};
 
   for (int i = 0; i < 6; i++) {
-    live_neighbors += curr_grid[neighbors[i]];
+    live_neighbors += const_params.curr_grid[neighbors[i]];
   }
 
-  grid_elem curr_value = curr_grid[grid_index];
+  grid_elem curr_value = const_params.curr_grid[grid_index];
   // values for the next iteration
   grid_elem next_value;
 
@@ -93,7 +92,7 @@ __global__ void kernel_single_iteration() {
     next_value = (live_neighbors == 3 || live_neighbors == 4);
   }
 
-  next_grid[grid_index] = next_value;
+  const_params.next_grid[grid_index] = next_value;
 
 }
 
@@ -105,7 +104,7 @@ Automaton34_2::Automaton34_2() {
   cuda_device_grid_next = NULL;
 }
 
-CudaRenderer::~Automaton34_2() {
+Automaton34_2::~Automaton34_2() {
   if (grid) {
     delete grid->data;
     delete grid;
@@ -116,7 +115,7 @@ CudaRenderer::~Automaton34_2() {
   }
 }
 
-const Grid*
+Grid*
 Automaton34_2::get_grid() {
 
   // need to copy contents of the final grid from device memory
@@ -125,7 +124,7 @@ Automaton34_2::get_grid() {
   printf("Copying grid data from device\n");
 
   cudaMemcpy(grid->data,
-             cuda_device_grid_data,
+             cuda_device_grid_curr,
              sizeof(grid_elem) * grid->width * grid->height,
              cudaMemcpyDeviceToHost);
 
@@ -140,7 +139,7 @@ Automaton34_2::setup(int num_of_iters) {
   std::string name;
   cudaError_t err = cudaGetDeviceCount(&deviceCount);
 
-  printf("Number of iterations: %d\n", num_iters);
+  printf("Number of iterations: %d\n", num_of_iters);
   num_iters = num_of_iters;
 
   printf("---------------------------------------------------------\n");
@@ -163,13 +162,14 @@ Automaton34_2::setup(int num_of_iters) {
     printf("   Global mem: %.0f MB\n", static_cast<float>(deviceProps.totalGlobalMem) / (1024 * 1024));
     printf("   CUDA Cap:   %d.%d\n", deviceProps.major, deviceProps.minor);
 
-  intf("---------------------------------------------------------\n");
-   (!isFastGPU)
-
-    printf("WARNING: "
-           "You're not running on a fast GPU, please consider using "
-           "NVIDIA GTX 480, 670 or 780.\n");
     printf("---------------------------------------------------------\n");
+    if (!isFastGPU) {
+
+      printf("WARNING: "
+             "You're not running on a fast GPU, please consider using "
+             "NVIDIA GTX 480, 670 or 780.\n");
+      printf("---------------------------------------------------------\n");
+    }
   }
 
   // By this time the scene should be loaded.  Now copy all the key
@@ -185,12 +185,12 @@ Automaton34_2::setup(int num_of_iters) {
 
   // Initialize parameters in constant memory.
   global_constants params;
-  params.height = grid->height;
-  params.width = grid->width;
-  params.curr_grid = cuada_device_grid_curr;
-  params.next_grid = cuada_device_grid_next;
+  params.grid_height = grid->height;
+  params.grid_width = grid->width;
+  params.curr_grid = cuda_device_grid_curr;
+  params.next_grid = cuda_device_grid_next;
 
-  cudaMemcpyToSymbol(const_params, &params, sizeof(globa_constants));
+  cudaMemcpyToSymbol(const_params, &params, sizeof(global_constants));
 }
 
 
@@ -241,8 +241,8 @@ Automaton34_2::create_grid(char *filename) {
 
   fclose(input);
 
-  grid = new grid(width, height);
-  grid->data = data
+  grid = new Grid(width, height);
+  grid->data = data;
 }
 
 #define THREAD_DIMX 32
@@ -253,8 +253,8 @@ Automaton34_2::run_automaton() {
 
   // number of threads needed in the x and y directions
   // note that this is less than the width/height due to the border of unmodified cells
-  int width_cells = image->width - 2;
-  int height_cells = image->height - 2;
+  int width_cells = grid->width - 2;
+  int height_cells = grid->height - 2;
 
   // block/grid size for the pixel kernal
   dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
@@ -262,7 +262,7 @@ Automaton34_2::run_automaton() {
               (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
 
   for (int iter = 0; iter < num_iters; iter++) {
-    kernal_single_iteration<<<cell_grid_dim, cell_block_dim>>>;
+    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>();
     cudaThreadSynchronize();
     cudaMemcpy(&cuda_device_grid_curr, &cuda_device_grid_next,
       sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
