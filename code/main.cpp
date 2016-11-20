@@ -62,9 +62,9 @@ int main(int argc, char** argv)
 
   // write to output file
   FILE *output = fopen("output.txt", "w");
-  fprintf(output, "%d %d\n", width, height);
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
+  fprintf(output, "%d %d\n", width - 2, height - 2);
+  for (int y = 1; y < height - 1; y++) {
+    for (int x = 1; x < width - 1; x++) {
       grid_elem val = output_grid->data[y*width + x];
       fprintf(output, "%u ", val);
     }
