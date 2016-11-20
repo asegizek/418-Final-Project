@@ -55,8 +55,8 @@ int main(int argc, char** argv)
   automaton->setup(num_of_iters);
   automaton->run_automaton();
 
-  //Grid *output_grid = automaton->get_grid();
-  Grid *output_grid = automaton->grid;
+  Grid *output_grid = automaton->get_grid();
+
   int height = output_grid->height;
   int width = output_grid->width;
 

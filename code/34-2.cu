@@ -124,7 +124,7 @@ Automaton34_2::get_grid() {
   printf("Copying grid data from device\n");
 
   cudaMemcpy(grid->data,
-             cuda_device_grid_curr,
+             &cuda_device_grid_curr,
              sizeof(grid_elem) * grid->width * grid->height,
              cudaMemcpyDeviceToHost);
 
