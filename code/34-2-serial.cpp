@@ -92,10 +92,39 @@ void printGrid(grid_elem* grid, int width, int height) {
 }
 void Automaton34_2_Serial::run_automaton() {
   for (int iter = 0; iter < num_iters; iter++) {
-    updateCells(curr_grid, next_grid, grid->width, grid->height);
+    update_cells();
     std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
   }
 }
+
+void Automaton34_2_Serial::update_cells() {
+  int grid_index;
+  int width = grid->width;
+  int height = grid->height;
+  grid_elem curr_val;
+  grid_elem next_val;
+  int live_neighbors;
+  for (int y = 1; y < height-1; y++) {
+    for (int x = 1; x < width-1; x++) {
+      grid_index = width*y + x;
+      curr_val = curr_grid[grid_index];
+      live_neighbors = 0;
+      int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
+                         grid_index + width, grid_index + width - 1, grid_index - 1};
+      for (int i = 0; i < 6; i++) {
+        live_neighbors += curr_grid[neighbors[i]];
+      }
+
+      if (!curr_val) {
+        next_val = (live_neighbors == 2);
+      } else {
+        next_val = (live_neighbors == 3 || live_neighbors == 4);
+      }
+      next_grid[grid_index] = next_val;
+    }
+  }
+}
+
 
 
 void updateCells(grid_elem* curr_grid, grid_elem* next_grid, int width, int height) {

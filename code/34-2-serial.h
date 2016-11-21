@@ -13,5 +13,6 @@ class Automaton34_2_Serial{
         Grid* get_grid();
         void setup(int num_of_iters);
         void create_grid(char *filename);
+        void update_cells();
         void run_automaton();
 };
