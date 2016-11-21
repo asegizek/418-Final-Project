@@ -56,7 +56,7 @@ __global__ void kernel_clear_grid() {
 // kernel_single_iteration (CUDA device code)
 //
 // compute a single iteration on the grid, putting the results in next_grid
-__global__ void kernel_single_iteration() {
+__global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
 
   // cells at border are not modified
   int image_x = blockIdx.x * blockDim.x + threadIdx.x + 1;
@@ -79,10 +79,12 @@ __global__ void kernel_single_iteration() {
                       grid_index + width, grid_index + width - 1, grid_index - 1};
 
   for (int i = 0; i < 6; i++) {
-    live_neighbors += const_params.curr_grid[neighbors[i]];
+    //live_neighbors += const_params.curr_grid[neighbors[i]];
+    live_neighbors += curr_grid[neighbors[i]];
   }
 
-  grid_elem curr_value = const_params.curr_grid[grid_index];
+  //grid_elem curr_value = const_params.curr_grid[grid_index];
+  grid_elem curr_value = curr_grid[grid_index];
   // values for the next iteration
   grid_elem next_value;
 
@@ -92,7 +94,8 @@ __global__ void kernel_single_iteration() {
     next_value = (live_neighbors == 3 || live_neighbors == 4);
   }
 
-  const_params.next_grid[grid_index] = next_value;
+  //const_params.next_grid[grid_index] = next_value;
+  next_grid[grid_index] = next_value;
 
 }
 
@@ -262,9 +265,13 @@ Automaton34_2::run_automaton() {
               (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
 
   for (int iter = 0; iter < num_iters; iter++) {
-    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>();
+    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
     cudaThreadSynchronize();
-    cudaMemcpy(cuda_device_grid_curr, cuda_device_grid_next,
-      sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
+    //cudaMemcpy(cuda_device_grid_curr, cuda_device_grid_next,
+      //sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
+    grid_elem* temp = cuda_device_grid_curr;
+    cuda_device_grid_curr = cuda_device_grid_next;
+    cuda_device_grid_next = temp;
+    
   }
 }
