@@ -5,7 +5,7 @@ CU_FILES   := 34-2.cu
 
 CU_DEPS    :=
 
-CC_FILES   := main.cpp 34-2-serial.cpp
+CC_FILES   := main.cpp 34-2-serial.cpp display.cpp
 
 
 LOGS	   := logs
@@ -24,7 +24,7 @@ FRAMEWORKS :=
 ifneq ($(wildcard /usr/local/cuda/.*),)
 # Building on Latedays
 NVCCFLAGS=-O3 -m64 -arch compute_20
-LIBS += GL glut cudart
+LIBS += GL glut GLU cudart
 LDFLAGS=-L/usr/local/cuda/lib64/ -lcudart
 else
 # Building on Linux
@@ -38,7 +38,7 @@ LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
 
 NVCC=nvcc
 
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/34-2.o $(OBJDIR)/34-2-serial.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/34-2.o $(OBJDIR)/34-2-serial.o $(OBJDIR)/display.o
 
 
 .PHONY: dirs clean

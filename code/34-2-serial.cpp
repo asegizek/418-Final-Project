@@ -90,10 +90,11 @@ void printGrid(grid_elem* grid, int width, int height) {
     printf("\n");
   }
 }
+
 void Automaton34_2_Serial::run_automaton() {
   for (int iter = 0; iter < num_iters; iter++) {
     update_cells();
-    std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
+    //std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
   }
 }
 
@@ -123,6 +124,7 @@ void Automaton34_2_Serial::update_cells() {
       next_grid[grid_index] = next_val;
     }
   }
+  std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
 }
 
 
