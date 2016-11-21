@@ -5,7 +5,7 @@ CU_FILES   := 34-2.cu
 
 CU_DEPS    :=
 
-CC_FILES   := main.cpp
+CC_FILES   := main.cpp 34-2-serial.cpp
 
 
 LOGS	   := logs
@@ -38,7 +38,7 @@ LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
 
 NVCC=nvcc
 
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/34-2.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/34-2.o $(OBJDIR)/34-2-serial.o
 
 
 .PHONY: dirs clean
