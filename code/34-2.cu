@@ -251,6 +251,23 @@ Automaton34_2::create_grid(char *filename) {
 #define THREAD_DIMX 32
 #define THREAD_DIMY 32
 
+//single update
+void 
+Automaton34_2::update_cells() {
+  int width_cells = grid->width - 2;
+  int height_cells = grid->height - 2;
+
+  // block/grid size for the pixel kernal
+  dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
+  dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
+              (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
+  kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
+    cudaThreadSynchronize();
+  grid_elem* temp = cuda_device_grid_curr;
+  cuda_device_grid_curr = cuda_device_grid_next;
+  cuda_device_grid_next = temp;
+}
+
 void
 Automaton34_2::run_automaton() {
 
@@ -272,6 +289,5 @@ Automaton34_2::run_automaton() {
     grid_elem* temp = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp;
-    
   }
 }

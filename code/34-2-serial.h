@@ -1,8 +1,10 @@
-#include "grid.h"
-
+#ifndef __34_2_SERIAL_H__
+#define __34_2_SERIAL_H__
+//#include "grid.h"
+#include "automata.h"
 void updateCells(grid_elem* curr_grid, grid_elem* next_grid, int width, int height);
 
-class Automaton34_2_Serial{
+class Automaton34_2_Serial: public Automaton{
     public:
         Grid* grid;
         int num_iters;
@@ -16,3 +18,5 @@ class Automaton34_2_Serial{
         void update_cells();
         void run_automaton();
 };
+
+#endif

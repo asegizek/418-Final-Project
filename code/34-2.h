@@ -28,6 +28,8 @@ public:
 
   void create_grid(char *filename);
 
+  void update_cells();
+  
   void run_automaton();
 
 };

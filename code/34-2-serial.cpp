@@ -93,7 +93,7 @@ void printGrid(grid_elem* grid, int width, int height) {
 
 void Automaton34_2_Serial::run_automaton() {
   for (int iter = 0; iter < num_iters; iter++) {
-    update_cells();
+    this->update_cells();
     //std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
   }
 }

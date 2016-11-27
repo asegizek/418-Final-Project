@@ -3,7 +3,7 @@
 
 #include "platformgl.h"
 
-#include "34-2-serial.h"
+#include "automata.h"
 
 
 GLint width = 640;
@@ -16,7 +16,7 @@ GLfloat bottom = 1.0;
 GLfloat top = 0.0;
 
 static struct {
-    Automaton34_2_Serial* automaton;
+    Automaton* automaton;
     int rows;
     int cols;
 } gData;
@@ -112,12 +112,12 @@ void displayHexagonsSlanted(void) {
     float h_width = 1.0f/ ((float)(cols + (rows - 1) * 0.5f));
     //quarter of the hexagon height
     float h_qheight = 1.0f / (float)(4+(rows-1)*3);
-
+    Grid* grid = gData.automaton->get_grid();
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             float cx = (j + (i + 1) * 0.5f) * h_width;
             float cy = (2+3*i)*h_qheight;
-            int grid_val = gData.automaton->curr_grid[i*rows + j];
+            int grid_val = grid->data[i*rows + j];
             float r = (grid_val) ? 0.0f : 1.0f;
             glColor3f(r, 1.0f, 1.0f);
             glBegin(GL_POLYGON);
@@ -128,6 +128,16 @@ void displayHexagonsSlanted(void) {
             glVertex2f(cx          , cy+2*h_qheight);
             glVertex2f(cx-h_width/2, cy+h_qheight);
             glEnd();
+            glColor3f(0.0f, 0.0f, 0.0f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(cx-h_width/2, cy-h_qheight);
+            glVertex2f(cx          , cy-2*h_qheight);
+            glVertex2f(cx+h_width/2, cy-h_qheight);
+            glVertex2f(cx+h_width/2, cy+h_qheight);
+            glVertex2f(cx          , cy+2*h_qheight);
+            glVertex2f(cx-h_width/2, cy+h_qheight);
+            glEnd();
+
         }
     }
     glFlush();
@@ -144,7 +154,7 @@ void handleKeyPress(unsigned char key, int x , int y) {
 }
 
 
-void startRenderer(Automaton34_2_Serial* automaton, int rows, int cols) {
+void startRenderer(Automaton* automaton, int rows, int cols) {
     gData.automaton = automaton;
     gData.rows = rows;
     gData.cols = cols;

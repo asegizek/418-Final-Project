@@ -10,7 +10,7 @@
 #include "34-2-serial.h"
 
 
-void startRenderer(Automaton34_2_Serial* automaton, int rows , int cols);
+void startRenderer(Automaton* automaton, int rows , int cols);
 
 void usage(const char* progname) {
   printf("Usage: %s [options]\n", progname);
@@ -65,69 +65,49 @@ int main(int argc, char** argv)
   // end parsing of commandline options //////////////////////////////////////
 
   clock_t t;
-
-  Grid* output_grid;
-  if (!serial) {
-    printf("Running parallel version\n");
-    Automaton34_2* automaton = new Automaton34_2();
-    automaton->create_grid(filename);
-    automaton->setup(num_of_iters);
-    t = clock();
-    automaton->run_automaton();
-    t = clock() - t;
-    output_grid = automaton->get_grid();
-    int height = output_grid->height;
-    int width = output_grid->width;
-
-  // write to output file
-    FILE *output = fopen("output.txt", "w");
-    fprintf(output, "%d %d\n", width - 2, height - 2);
-    for (int y = 1; y < height - 1; y++) {
-      for (int x = 1; x < width - 1; x++) {
-        grid_elem val = output_grid->data[y*width + x];
-        fprintf(output, "%u ", val);
-      }
-      fprintf(output, "\n");
-    }
-    fclose(output);
-    delete automaton;
-  } 
-
-  else {
-    printf("Running serial version\n");
-    Automaton34_2_Serial* a = new Automaton34_2_Serial();
-    a->create_grid(filename);
-    a->setup(num_of_iters);
-    if (display) {
-      glutInit(&argc, argv);
-      startRenderer(a, a->grid->width, a->grid->height);
-      return 0;
-    }
-    
-    t = clock();
-    a->run_automaton();
-    t = clock() - t;
-    output_grid = a->get_grid();
-    int height = output_grid->height;
-    int width = output_grid->width;
-
-  // write to output file
-    FILE *output = fopen("output-serial.txt", "w");
-    fprintf(output, "%d %d\n", width - 2, height - 2);
-    for (int y = 1; y < height - 1; y++) {
-      for (int x = 1; x < width - 1; x++) {
-        grid_elem val = output_grid->data[y*width + x];
-        fprintf(output, "%u ", val);
-      }
-      fprintf(output, "\n");
-    }
-    fclose(output);
+  Automaton* automaton;
+  
+  if (serial) {
+    printf("Running serial implementation\n");
+    automaton = new Automaton34_2_Serial();
+  } else {
+    printf("Running CUDA implementation\n");
+    automaton = new Automaton34_2();
   }
 
-  
+  automaton->create_grid(filename);
+  automaton->setup(num_of_iters);
+  Grid* output_grid = automaton->get_grid();
+  int height = output_grid->height;
+  int width = output_grid->width;
+  if (display) {
+    glutInit(&argc, argv);
+    startRenderer(automaton, height, width);
+    return 0;
+  }
+  t = clock();
+  automaton->run_automaton();
+  t = clock() - t;
+  output_grid = automaton->get_grid();
+
+  // write to output file
+  FILE *output;
+  if (serial) output = fopen("output-serial.txt", "w");
+  else output = fopen("output.txt", "w");
+  fprintf(output, "%d %d\n", width - 2, height - 2);
+  for (int y = 1; y < height - 1; y++) {
+    for (int x = 1; x < width - 1; x++) {
+      grid_elem val = output_grid->data[y*width + x];
+      fprintf(output, "%u ", val);
+    }
+    fprintf(output, "\n");
+  }
+  fclose(output);
 
 
-  
+
+
+
   printf("computation time: %fs\n", ((float)t)/CLOCKS_PER_SEC);
   printf("done\n");
   return 0;
