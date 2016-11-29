@@ -30,6 +30,8 @@ int main(int argc, char** argv)
 
   char def[] = "tests/default.txt";
   char *filename = def;
+  char out[] = "output.txt";
+  char *output_file = out;
   int num_of_iters = 1;
   int serial = 0;
   int display = 0;
@@ -47,6 +49,7 @@ int main(int argc, char** argv)
   static struct option long_options[] = {
     {"help",     0, 0,  '?'},
     {"file",     1, 0,  'f'},
+    {"output",     1, 0,  'o'},
     {"iterations",     1, 0,  'i'},
     {"pattern_x",  1, 0, 'x'},
     {"pattern_y",  1, 0, 'y'},
@@ -55,11 +58,14 @@ int main(int argc, char** argv)
     {0 ,0, 0, 0}
   };
 
-  while ((opt = getopt_long(argc, argv, "f:i:x:y:?:s", long_options, NULL)) != EOF) {
+  while ((opt = getopt_long(argc, argv, "f:o:i:x:y:?:s", long_options, NULL)) != EOF) {
 
     switch (opt) {
     case 'f':
       filename = optarg;
+      break;
+    case 'o':
+      output_file = optarg;
       break;
     case 'i':
       num_of_iters = atoi(optarg);
@@ -97,7 +103,7 @@ int main(int argc, char** argv)
     int width = output_grid->width;
 
   // write to output file
-    FILE *output = fopen("output.txt", "w");
+    FILE *output = fopen(output_file, "w");
     fprintf(output, "%d %d\n", width - 2, height - 2);
     for (int y = 1; y < height - 1; y++) {
       for (int x = 1; x < width - 1; x++) {
