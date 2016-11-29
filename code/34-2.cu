@@ -198,11 +198,15 @@ Automaton34_2::setup(int num_of_iters) {
 
 
 // create the initial grid using the input file
+//
+// pattern_x and pattern_y determine how many times the input grid is repeated in the
+// x and y directions
 void
-Automaton34_2::create_grid(char *filename) {
+Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y) {
 
   FILE *input = NULL;
-  int width, height;
+  int width, height; // width and height of entire image
+  int section_width, section_height; // width and height of the input grid
   grid_elem *data;
 
   input = fopen(filename, "r");
@@ -213,12 +217,15 @@ Automaton34_2::create_grid(char *filename) {
   }
 
   // copy in width and height from file
-  if (fscanf(input, "%d %d\n", &width, &height) != 2) {
+  if (fscanf(input, "%d %d\n", &section_width, &section_height) != 2) {
     fclose(input);
     printf("Invalid input\n");
     printf("\nTerminating program\n");
     exit(1);
   }
+
+  width = section_width*pattern_x;
+  height = section_height*pattern_y;
 
   printf("Width: %d\nHeight: %d\n", width, height);
 
@@ -228,8 +235,9 @@ Automaton34_2::create_grid(char *filename) {
   data = new grid_elem [width*height];
 
   // insert data from file into grid
-  for (int y = 1; y < height - 1; y++) {
-    for (int x = 1; x < width - 1; x++) {
+  for (int section_y = 0; section_y < section_height; section_y++) {
+    for (int section_x = 0; section_x < section_width; section_x++) {
+
       int temp;
       if (fscanf(input, "%d", &temp) != 1) {
         fclose(input);
@@ -238,7 +246,14 @@ Automaton34_2::create_grid(char *filename) {
         exit(1);
       }
 
-      data[width*y + x] = (grid_elem)temp;
+      // write value for each pattern
+      for (int py = 0; py < pattern_y; py++) {
+        for (int px = 0; px < pattern_x; px++) {
+          int y_index = py*section_height + section_y + 1;
+          int x_index = px*section_width + section_x + 1;
+          data[y_index*width + x_index] = (grid_elem)temp;
+        }
+      }
     }
   }
 
@@ -272,6 +287,6 @@ Automaton34_2::run_automaton() {
     grid_elem* temp = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp;
-    
+
   }
 }

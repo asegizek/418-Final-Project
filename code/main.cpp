@@ -3,7 +3,7 @@
 #include <getopt.h>
 #include <string>
 #include <algorithm>
-#include <time.h>
+#include <ctime>
 
 #include "platformgl.h"
 #include "34-2.h"
@@ -33,18 +33,29 @@ int main(int argc, char** argv)
   int num_of_iters = 1;
   int serial = 0;
   int display = 0;
+  int pattern_x = 1;
+  int pattern_y = 1;
   // parse commandline options ////////////////////////////////////////////
   int opt;
+
+  // used to get time infromation
+  time_t total_start, total_end;
+  time_t compute_start, compute_end;
+
+  total_start = clock();
+
   static struct option long_options[] = {
     {"help",     0, 0,  '?'},
     {"file",     1, 0,  'f'},
     {"iterations",     1, 0,  'i'},
+    {"pattern_x",  1, 0, 'x'},
+    {"pattern_y",  1, 0, 'y'},
     {"serial",   0, 0, 's'},
     {"display",  0, 0, 'd'},
     {0 ,0, 0, 0}
   };
 
-  while ((opt = getopt_long(argc, argv, "f:i:?:s", long_options, NULL)) != EOF) {
+  while ((opt = getopt_long(argc, argv, "f:i:x:y:?:s", long_options, NULL)) != EOF) {
 
     switch (opt) {
     case 'f':
@@ -56,6 +67,12 @@ int main(int argc, char** argv)
     case 's':
       serial = 1;
       break;
+    case 'x':
+      pattern_x = atoi(optarg);
+      break;
+    case 'y':
+      pattern_y = atoi(optarg);
+      break;
     case '?':
     default:
       usage(argv[0]);
@@ -64,17 +81,17 @@ int main(int argc, char** argv)
   }
   // end parsing of commandline options //////////////////////////////////////
 
-  clock_t t;
-
   Grid* output_grid;
   if (!serial) {
     printf("Running parallel version\n");
     Automaton34_2* automaton = new Automaton34_2();
-    automaton->create_grid(filename);
+    automaton->create_grid(filename, pattern_x, pattern_y);
     automaton->setup(num_of_iters);
-    t = clock();
+
+    compute_start = clock();
     automaton->run_automaton();
-    t = clock() - t;
+    compute_end = clock();
+
     output_grid = automaton->get_grid();
     int height = output_grid->height;
     int width = output_grid->width;
@@ -91,7 +108,7 @@ int main(int argc, char** argv)
     }
     fclose(output);
     delete automaton;
-  } 
+  }
 
   else {
     printf("Running serial version\n");
@@ -103,10 +120,11 @@ int main(int argc, char** argv)
       startRenderer(a, a->grid->width, a->grid->height);
       return 0;
     }
-    
-    t = clock();
+
+    compute_start = clock();
     a->run_automaton();
-    t = clock() - t;
+    compute_end = clock();
+
     output_grid = a->get_grid();
     int height = output_grid->height;
     int width = output_grid->width;
@@ -124,11 +142,13 @@ int main(int argc, char** argv)
     fclose(output);
   }
 
-  
 
+  total_end = clock();
 
-  
-  printf("computation time: %fs\n", ((float)t)/CLOCKS_PER_SEC);
+  double total_time = double(total_end - total_start) / CLOCKS_PER_SEC;
+  double compute_time = double(compute_end - compute_start) / CLOCKS_PER_SEC;
+  printf("total time: %f s\n", total_time);
+  printf("compute time: %f s\n", compute_time);
   printf("done\n");
   return 0;
 }
