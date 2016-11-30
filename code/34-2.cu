@@ -52,6 +52,8 @@ __global__ void kernel_clear_grid() {
   const_params.curr_grid[offset] = 0;
 }
 
+#define THREAD_DIMX 32
+#define THREAD_DIMY 32
 
 // kernel_single_iteration (CUDA device code)
 //
@@ -67,35 +69,44 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
   // index in the grid of this thread
   int grid_index = image_y*width + image_x;
 
-  // cells at border are not modified
-  if (image_x >= width - 1 || image_y >= height - 1)
-      return;
+
+  // create a shared memory array for the cells this thread will work with
+  __shared__ grid_elem local_cells[(THREAD_DIMX + 2)*(THREAD_DIMY + 2)];
+  // index of current cell in local_cells
+  int local_x = threadIdx.x + 1;
+  int local_y = threadIdx.y + 1;
+  int local_index = local_y*(THREAD_DIMX + 2) + local_x;
 
   uint8_t live_neighbors = 0;
 
+  int lwidth = THREAD_DIMX + 2;
   // compute the number of live_neighbors
   // neighbors = index of {up, up-right, right, down, down-left, left}
-  int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
-                      grid_index + width, grid_index + width - 1, grid_index - 1};
+  int neighbors[] = {local_index - lwidth, local_index - lwidth + 1, local_index + 1,
+                     local_index + lwidth, local_index + lwidth - 1, local_index - 1};
 
-  for (int i = 0; i < 6; i++) {
-    //live_neighbors += const_params.curr_grid[neighbors[i]];
-    live_neighbors += curr_grid[neighbors[i]];
+  // cells at border are not modified
+  if (image_x < width - 1 && image_y < height - 1) {
+
+    for (int i = 0; i < 6; i++) {
+      //live_neighbors += const_params.curr_grid[neighbors[i]];
+      live_neighbors += local_cells[neighbors[i]];
+    }
+
+    //grid_elem curr_value = const_params.curr_grid[grid_index];
+    grid_elem curr_value = local_cells[local_index];
+    // values for the next iteration
+    grid_elem next_value;
+
+    if (!curr_value) {
+      next_value = (live_neighbors == 2);
+    } else {
+      next_value = (live_neighbors == 3 || live_neighbors == 4);
+    }
+
+    //const_params.next_grid[grid_index] = next_value;
+    next_grid[grid_index] = next_value;
   }
-
-  //grid_elem curr_value = const_params.curr_grid[grid_index];
-  grid_elem curr_value = curr_grid[grid_index];
-  // values for the next iteration
-  grid_elem next_value;
-
-  if (!curr_value) {
-    next_value = (live_neighbors == 2);
-  } else {
-    next_value = (live_neighbors == 3 || live_neighbors == 4);
-  }
-
-  //const_params.next_grid[grid_index] = next_value;
-  next_grid[grid_index] = next_value;
 
 }
 
@@ -263,8 +274,6 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y) {
   grid->data = data;
 }
 
-#define THREAD_DIMX 32
-#define THREAD_DIMY 32
 
 void
 Automaton34_2::run_automaton() {
@@ -284,6 +293,7 @@ Automaton34_2::run_automaton() {
     cudaThreadSynchronize();
     //cudaMemcpy(cuda_device_grid_curr, cuda_device_grid_next,
       //sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
+    // swap the 2 arrays
     grid_elem* temp = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp;
