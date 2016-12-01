@@ -161,6 +161,10 @@ Automaton34_2::setup(int num_of_iters) {
     }
 
     printf("Device %d: %s\n", i, deviceProps.name);
+    printf("   Memory Clock Rate (KHz): %d\n", deviceProps.memoryClockRate);
+    printf("   Memory Bus Width (bits): %d\n", deviceProps.memoryBusWidth);
+    printf("   Peak Memory Bandwidth (GB/s): %f\n",
+        2.0*deviceProps.memoryClockRate*(deviceProps.memoryBusWidth/8)/1.0e6);
     printf("   SMs:        %d\n", deviceProps.multiProcessorCount);
     printf("   Global mem: %.0f MB\n", static_cast<float>(deviceProps.totalGlobalMem) / (1024 * 1024));
     printf("   CUDA Cap:   %d.%d\n", deviceProps.major, deviceProps.minor);
