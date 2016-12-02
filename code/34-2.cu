@@ -60,6 +60,9 @@ __global__ void kernel_clear_grid() {
 // compute a single iteration on the grid, putting the results in next_grid
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
 
+  // all the cells which need to be looked at by this block
+  __shared__ float local_cells[THREAD_DIMX*THREAD_DIMY];
+
   // remember that cells on the border of a block don't do any work
   int image_x = blockIdx.x * (THREAD_DIMX - 2) + threadIdx.x;
   int image_y = blockIdx.y * (THREAD_DIMY - 2) + threadIdx.y;
@@ -67,11 +70,19 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
   int width = const_params.grid_width;
   int height = const_params.grid_width;
 
-  // thread maps to any valid cell in the grid (including borders)
-  // bool in_range = image_x < width && image_y < height;
-  // thread is not in the border of its block
-  // bool not_in_border = 0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
-  //                   0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1;
+  // index in the grid of this thread
+  int grid_index = image_y*width + image_x;
+
+  // index in the grid of local cells
+  int local_index = threadIdx.y*THREAD_DIMX + threadIdx.x;
+
+  // store data in shared memory
+
+  // only threads inside of the range of the grid should store shared memory
+  if (image_x < width && image_y < height) {
+    local_cells[local_index] = curr_grid[grid_index];
+  }
+  __syncthreads();
 
   // the algorithm only computes the next state of cells:
   //    -in a valid grid cell, but not in the border of the grid
@@ -80,24 +91,22 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
       0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
       0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1) {
 
-    // index in the grid of this thread
-    int grid_index = image_y*width + image_x;
 
     uint8_t live_neighbors = 0;
 
+    grid_elem curr_value = local_cells[local_index];
+
     // compute the number of live_neighbors
 
-    //{up, up-right, right, down, down-left, left}
+    //{up, up-right, left, right, down-left, down}
 
-    live_neighbors += curr_grid[grid_index - width];
-    live_neighbors += curr_grid[grid_index - width + 1];
-    live_neighbors += curr_grid[grid_index - 1];
-    live_neighbors += curr_grid[grid_index + 1];
-    live_neighbors += curr_grid[grid_index + width - 1];
-    live_neighbors += curr_grid[grid_index + width];
+    live_neighbors += local_cells[local_index - THREAD_DIMX];
+    live_neighbors += local_cells[local_index - THREAD_DIMX + 1];
+    live_neighbors += local_cells[local_index - 1];
+    live_neighbors += local_cells[local_index + 1];
+    live_neighbors += local_cells[local_index + THREAD_DIMX - 1];
+    live_neighbors += local_cells[local_index + THREAD_DIMX];
 
-    //grid_elem curr_value = const_params.curr_grid[grid_index];
-    grid_elem curr_value = curr_grid[grid_index];
     // values for the next iteration
     grid_elem next_value;
 
