@@ -52,6 +52,8 @@ __global__ void kernel_clear_grid() {
   const_params.curr_grid[offset] = 0;
 }
 
+#define THREAD_DIMX 32
+#define THREAD_DIMY 8
 
 // kernel_single_iteration (CUDA device code)
 //
@@ -64,23 +66,25 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
 
   int width = const_params.grid_width;
   int height = const_params.grid_width;
-  // index in the grid of this thread
-  int grid_index = image_y*width + image_x;
 
   // cells at border are not modified
   if (image_x < width - 1 && image_y < height - 1) {
 
+    // index in the grid of this thread
+    int grid_index = image_y*width + image_x;
+
     uint8_t live_neighbors = 0;
 
     // compute the number of live_neighbors
-    // neighbors = index of {up, up-right, right, down, down-left, left}
-    int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
-                        grid_index + width, grid_index + width - 1, grid_index - 1};
 
-    for (int i = 0; i < 6; i++) {
-      //live_neighbors += const_params.curr_grid[neighbors[i]];
-      live_neighbors += curr_grid[neighbors[i]];
-    }
+    //{up, up-right, right, down, down-left, left}
+
+    live_neighbors += curr_grid[grid_index - width];
+    live_neighbors += curr_grid[grid_index - width + 1];
+    live_neighbors += curr_grid[grid_index - 1];
+    live_neighbors += curr_grid[grid_index + 1];
+    live_neighbors += curr_grid[grid_index + width - 1];
+    live_neighbors += curr_grid[grid_index + width];
 
     //grid_elem curr_value = const_params.curr_grid[grid_index];
     grid_elem curr_value = curr_grid[grid_index];
@@ -266,9 +270,6 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y) {
   grid = new Grid(width, height);
   grid->data = data;
 }
-
-#define THREAD_DIMX 32
-#define THREAD_DIMY 8
 
 void
 Automaton34_2::run_automaton() {
