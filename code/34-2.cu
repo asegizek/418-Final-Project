@@ -82,7 +82,7 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
     live_neighbors += curr_grid[grid_index + width - 1];
     if (live_neighbors > 0) {
       live_neighbors += curr_grid[grid_index + width];
-    r
+    }
 
     //grid_elem curr_value = const_params.curr_grid[grid_index];
     grid_elem curr_value = curr_grid[grid_index];
