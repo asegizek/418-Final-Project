@@ -26,7 +26,7 @@ public:
 
   void setup(int num_of_iters);
 
-  void create_grid(char *filename, int pattern_x, int pattern_y);
+  void create_grid(char *filename, int pattern_x, int pattern_y, int zeroed);
 
   void run_automaton();
 

@@ -205,8 +205,10 @@ Automaton34_2::setup(int num_of_iters) {
 //
 // pattern_x and pattern_y determine how many times the input grid is repeated in the
 // x and y directions
+//
+// if zeroed is true than all the patterns are zeroed out
 void
-Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y) {
+Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zeroed) {
 
   FILE *input = NULL;
   int width, height; // width and height of entire image
@@ -239,6 +241,8 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y) {
   data = new grid_elem [width*height];
 
   // insert data from file into grid
+
+  // section_y and section_x represent the position in one individual 'pattern'
   for (int section_y = 0; section_y < section_height; section_y++) {
     for (int section_x = 0; section_x < section_width; section_x++) {
 
@@ -251,11 +255,21 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y) {
       }
 
       // write value for each pattern
+      // py and px represent the current pattern we are in
       for (int py = 0; py < pattern_y; py++) {
         for (int px = 0; px < pattern_x; px++) {
+
           int y_index = py*section_height + section_y + 1;
           int x_index = px*section_width + section_x + 1;
-          data[y_index*width + x_index] = (grid_elem)temp;
+
+          // zeroed means that all cells outside of the initial pattern are zeroed out
+          if (zeroed && (py > 0 || px > 0)) {
+            data[y_index*width + x_index] = 0;
+          }
+
+          else {
+            data[y_index*width + x_index] = (grid_elem)temp;
+          }
         }
       }
     }

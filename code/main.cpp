@@ -17,8 +17,13 @@ void usage(const char* progname) {
   printf("Program Options:\n");
   printf("  -f  --file   <FILENAME>    Filename of the grid to be used\n");
   printf("  default: default.txt\n");
-  printf("  -i  --iterations <INT>         Number of iterations in automotan\n");
+  printf("  -i  --iterations <INT>     Number of iterations in automotan\n");
   printf("  default: 1\n");
+  printf("  -i  --pattern x <INT>      Number of times grid is repeated in x direction\n");
+  printf("  default: 1\n");
+  printf("  -i  --pattern y <INT>      Number of times grid is repeated in y direction\n");
+  printf("  default: 1\n");
+  printf("  -z  --zeroed patterns      All the patterns are zeroed out\n");
   //printf("  -s --serial                 Run serial implementation\n");
   //printf("  -d --display                Run in display mode\n");
   printf("  -?  --help                 This message\n");
@@ -35,6 +40,7 @@ int main(int argc, char** argv)
   int num_of_iters = 1;
   int serial = 0;
   int display = 0;
+  int zeroed = 0;
   int pattern_x = 1;
   int pattern_y = 1;
   // parse commandline options ////////////////////////////////////////////
@@ -55,10 +61,11 @@ int main(int argc, char** argv)
     {"pattern_y",  1, 0, 'y'},
     {"serial",   0, 0, 's'},
     {"display",  0, 0, 'd'},
+    {"zeroed",  0, 0, 'z'},
     {0 ,0, 0, 0}
   };
 
-  while ((opt = getopt_long(argc, argv, "f:o:i:x:y:?:s", long_options, NULL)) != EOF) {
+  while ((opt = getopt_long(argc, argv, "f:o:i:x:y:?:sz", long_options, NULL)) != EOF) {
 
     switch (opt) {
     case 'f':
@@ -79,6 +86,9 @@ int main(int argc, char** argv)
     case 'y':
       pattern_y = atoi(optarg);
       break;
+    case 'z':
+      zeroed = 1;
+      break;
     case '?':
     default:
       usage(argv[0]);
@@ -91,7 +101,7 @@ int main(int argc, char** argv)
   if (!serial) {
     printf("Running parallel version\n");
     Automaton34_2* automaton = new Automaton34_2();
-    automaton->create_grid(filename, pattern_x, pattern_y);
+    automaton->create_grid(filename, pattern_x, pattern_y, zeroed);
     automaton->setup(num_of_iters);
 
     compute_start = clock();
