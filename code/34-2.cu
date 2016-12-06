@@ -52,35 +52,49 @@ __global__ void kernel_clear_grid() {
   const_params.curr_grid[offset] = 0;
 }
 
+#define THREAD_DIMX 32
+#define THREAD_DIMY 8
 
 // kernel_single_iteration (CUDA device code)
 //
 // compute a single iteration on the grid, putting the results in next_grid
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
 
-  // cells at border are not modified
-  int image_x = blockIdx.x * blockDim.x + threadIdx.x + 1;
-  int image_y = blockIdx.y * blockDim.y + threadIdx.y + 1;
+  // remember that cells on the border of a block don't do any work
+  int image_x = blockIdx.x * (THREAD_DIMX - 2) + threadIdx.x;
+  int image_y = blockIdx.y * (THREAD_DIMY - 2) + threadIdx.y;
 
   int width = const_params.grid_width;
   int height = const_params.grid_width;
-  // index in the grid of this thread
-  int grid_index = image_y*width + image_x;
 
-  // cells at border are not modified
-  if (image_x < width - 1 && image_y < height - 1) {
+  // thread maps to any valid cell in the grid (including borders)
+  // bool in_range = image_x < width && image_y < height;
+  // thread is not in the border of its block
+  // bool not_in_border = 0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
+  //                   0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1;
+
+  // the algorithm only computes the next state of cells:
+  //    -in a valid grid cell, but not in the border of the grid
+  //    -not in the border of any blocks
+  if (image_x < width - 1 && image_y < height - 1 &&
+      0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
+      0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1) {
+
+    // index in the grid of this thread
+    int grid_index = image_y*width + image_x;
 
     uint8_t live_neighbors = 0;
 
     // compute the number of live_neighbors
-    // neighbors = index of {up, up-right, right, down, down-left, left}
-    int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
-                        grid_index + width, grid_index + width - 1, grid_index - 1};
 
-    for (int i = 0; i < 6; i++) {
-      //live_neighbors += const_params.curr_grid[neighbors[i]];
-      live_neighbors += curr_grid[neighbors[i]];
-    }
+    //{up, up-right, right, down, down-left, left}
+
+    live_neighbors += curr_grid[grid_index - width];
+    live_neighbors += curr_grid[grid_index - width + 1];
+    live_neighbors += curr_grid[grid_index - 1];
+    live_neighbors += curr_grid[grid_index + 1];
+    live_neighbors += curr_grid[grid_index + width - 1];
+    live_neighbors += curr_grid[grid_index + width];
 
     //grid_elem curr_value = const_params.curr_grid[grid_index];
     grid_elem curr_value = curr_grid[grid_index];
@@ -281,9 +295,6 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
   grid->data = data;
 }
 
-#define THREAD_DIMX 32
-#define THREAD_DIMY 8
-
 void
 Automaton34_2::run_automaton() {
 
@@ -294,8 +305,8 @@ Automaton34_2::run_automaton() {
 
   // block/grid size for the pixel kernal
   dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
-  dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
-              (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
+  dim3 cell_grid_dim((width_cells + (cell_block_dim.x - 2) - 1) / (cell_block_dim.x - 2),
+              (height_cells + (cell_block_dim.y - 2) - 1) / (cell_block_dim.y - 2));
 
   for (int iter = 0; iter < num_iters; iter++) {
     kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
