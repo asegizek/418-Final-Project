@@ -55,6 +55,8 @@ __global__ void kernel_clear_grid() {
 #define THREAD_DIMX 32
 #define THREAD_DIMY 16
 
+// spacing between values in the cell array
+#define SPACING 1
 
 // kernel_single_iteration (CUDA device code)
 //
@@ -62,7 +64,7 @@ __global__ void kernel_clear_grid() {
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
 
   // all the cells which need to be looked at by this block
-  __shared__ float local_cells[THREAD_DIMX*THREAD_DIMY];
+  __shared__ float local_cells[THREAD_DIMX*THREAD_DIMY*SPACING];
 
   // remember that cells on the border of a block don't do any work
   int image_x = blockIdx.x * (THREAD_DIMX - 2) + threadIdx.x;
@@ -81,7 +83,7 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
 
   // only threads inside of the range of the grid should store shared memory
   if (image_x < width && image_y < height) {
-    local_cells[local_index] = curr_grid[grid_index];
+    local_cells[local_index*SPACING] = curr_grid[grid_index];
   }
   __syncthreads();
 
@@ -95,18 +97,18 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
 
     uint8_t live_neighbors = 0;
 
-    grid_elem curr_value = local_cells[local_index];
+    grid_elem curr_value = local_cells[local_index*SPACING];
 
     // compute the number of live_neighbors
 
     //{up, up-right, left, right, down-left, down}
 
-    live_neighbors += local_cells[local_index - THREAD_DIMX];
-    live_neighbors += local_cells[local_index - THREAD_DIMX + 1];
-    live_neighbors += local_cells[local_index - 1];
-    live_neighbors += local_cells[local_index + 1];
-    live_neighbors += local_cells[local_index + THREAD_DIMX - 1];
-    live_neighbors += local_cells[local_index + THREAD_DIMX];
+    live_neighbors += local_cells[(local_index - THREAD_DIMX)*SPACING];
+    live_neighbors += local_cells[(local_index - THREAD_DIMX + 1)*SPACING];
+    live_neighbors += local_cells[(local_index - 1)*SPACING];
+    live_neighbors += local_cells[(local_index + 1)*SPACING];
+    live_neighbors += local_cells[(local_index + THREAD_DIMX - 1)*SPACING];
+    live_neighbors += local_cells[(local_index + THREAD_DIMX)*SPACING];
 
     // values for the next iteration
     grid_elem next_value;
