@@ -55,6 +55,7 @@ __global__ void kernel_clear_grid() {
 #define THREAD_DIMX 32
 #define THREAD_DIMY 16
 
+
 // kernel_single_iteration (CUDA device code)
 //
 // compute a single iteration on the grid, putting the results in next_grid
