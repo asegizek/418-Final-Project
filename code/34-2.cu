@@ -54,61 +54,72 @@ __global__ void kernel_clear_grid() {
 
 #define THREAD_DIMX 32
 #define THREAD_DIMY 8
+#define SPACING 32
 
 // kernel_single_iteration (CUDA device code)
 //
 // compute a single iteration on the grid, putting the results in next_grid
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
 
-  // remember that cells on the border of a block don't do any work
-  int image_x = blockIdx.x * (THREAD_DIMX - 2) + threadIdx.x;
-  int image_y = blockIdx.y * (THREAD_DIMY - 2) + threadIdx.y;
+  live_block_t *live_blocks = const_params.live_blocks;
 
-  int width = const_params.grid_width;
-  int height = const_params.grid_width;
+  // index of this block in the block array
+  int block_index = blockIdx.y*gridDim.x*SPACING;
 
-  // thread maps to any valid cell in the grid (including borders)
-  // bool in_range = image_x < width && image_y < height;
-  // thread is not in the border of its block
-  // bool not_in_border = 0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
-  //                   0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1;
+  live_block_t block_live = live_blocks[block_index];
 
-  // the algorithm only computes the next state of cells:
-  //    -in a valid grid cell, but not in the border of the grid
-  //    -not in the border of any blocks
-  if (image_x < width - 1 && image_y < height - 1 &&
-      0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
-      0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1) {
+  // only do work if block isn't dead
+  if (block_live) {
+    // remember that cells on the border of a block don't do any work
+    int image_x = blockIdx.x * (THREAD_DIMX - 2) + threadIdx.x;
+    int image_y = blockIdx.y * (THREAD_DIMY - 2) + threadIdx.y;
 
-    // index in the grid of this thread
-    int grid_index = image_y*width + image_x;
+    int width = const_params.grid_width;
+    int height = const_params.grid_width;
 
-    uint8_t live_neighbors = 0;
+    // thread maps to any valid cell in the grid (including borders)
+    // bool in_range = image_x < width && image_y < height;
+    // thread is not in the border of its block
+    // bool not_in_border = 0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
+    //                   0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1;
 
-    // compute the number of live_neighbors
+    // the algorithm only computes the next state of cells:
+    //    -in a valid grid cell, but not in the border of the grid
+    //    -not in the border of any blocks
+    if (image_x < width - 1 && image_y < height - 1 &&
+        0 < threadIdx.x && threadIdx.x < THREAD_DIMX - 1 &&
+        0 < threadIdx.y && threadIdx.y < THREAD_DIMY - 1) {
 
-    //{up, up-right, right, down, down-left, left}
+      // index in the grid of this thread
+      int grid_index = image_y*width + image_x;
 
-    live_neighbors += curr_grid[grid_index - width];
-    live_neighbors += curr_grid[grid_index - width + 1];
-    live_neighbors += curr_grid[grid_index - 1];
-    live_neighbors += curr_grid[grid_index + 1];
-    live_neighbors += curr_grid[grid_index + width - 1];
-    live_neighbors += curr_grid[grid_index + width];
+      uint8_t live_neighbors = 0;
 
-    //grid_elem curr_value = const_params.curr_grid[grid_index];
-    grid_elem curr_value = curr_grid[grid_index];
-    // values for the next iteration
-    grid_elem next_value;
+      // compute the number of live_neighbors
 
-    if (!curr_value) {
-      next_value = (live_neighbors == 2);
-    } else {
-      next_value = (live_neighbors == 3 || live_neighbors == 4);
+      //{up, up-right, right, down, down-left, left}
+
+      live_neighbors += curr_grid[grid_index - width];
+      live_neighbors += curr_grid[grid_index - width + 1];
+      live_neighbors += curr_grid[grid_index - 1];
+      live_neighbors += curr_grid[grid_index + 1];
+      live_neighbors += curr_grid[grid_index + width - 1];
+      live_neighbors += curr_grid[grid_index + width];
+
+      //grid_elem curr_value = const_params.curr_grid[grid_index];
+      grid_elem curr_value = curr_grid[grid_index];
+      // values for the next iteration
+      grid_elem next_value;
+
+      if (!curr_value) {
+        next_value = (live_neighbors == 2);
+      } else {
+        next_value = (live_neighbors == 3 || live_neighbors == 4);
+      }
+
+      //const_params.next_grid[grid_index] = next_value;
+      next_grid[grid_index] = next_value;
     }
-
-    //const_params.next_grid[grid_index] = next_value;
-    next_grid[grid_index] = next_value;
   }
 
 }
@@ -217,9 +228,9 @@ Automaton34_2::setup(int num_of_iters) {
   dim3 grid_dim = get_grid_dim();
 
   // setup the live block grid
-  cudaMalloc(&cuda_device_live_blocks, sizeof(live_block_t) * grid_dim.x * grid_dim.y);
+  cudaMalloc(&cuda_device_live_blocks, sizeof(live_block_t) * grid_dim.x * grid_dim.y*SPACING);
   // all blocks are initially live
-  cudaMemset(cuda_device_live_blocks, 1, sizeof(live_block_t) * grid_dim.x * grid_dim.y);
+  cudaMemset(cuda_device_live_blocks, 1, sizeof(live_block_t) * grid_dim.x * grid_dim.y*SPACING);
   params.live_blocks = cuda_device_live_blocks;
 
   cudaMemcpyToSymbol(const_params, &params, sizeof(global_constants));
