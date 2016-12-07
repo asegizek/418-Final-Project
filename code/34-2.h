@@ -7,6 +7,8 @@
 
 #include "automata.h"
 
+// used as elements in the live_block grid
+typedef bool live_block_t;
 
 class Automaton34_2: public Automaton {
 
@@ -17,7 +19,7 @@ public:
 
   grid_elem* cuda_device_grid_curr;
   grid_elem* cuda_device_grid_next;
-
+  live_block_t* cuda_device_live_blocks;
 
   Automaton34_2();
   virtual ~Automaton34_2();
@@ -29,6 +31,8 @@ public:
   void create_grid(char *filename, int pattern_x, int pattern_y, int zeroed);
 
   void run_automaton();
+
+  dim3 get_grid_dim();
 
 };
 

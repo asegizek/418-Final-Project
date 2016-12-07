@@ -21,6 +21,7 @@ struct global_constants {
   int grid_height;
   grid_elem* curr_grid;
   grid_elem* next_grid;
+  live_block_t* live_blocks;
 };
 
 // Global variable that is in scope, but read-only, for all cuda
@@ -119,6 +120,7 @@ Automaton34_2::Automaton34_2() {
   grid = NULL;
   cuda_device_grid_curr = NULL;
   cuda_device_grid_next = NULL;
+  cuda_device_live_blocks = NULL;
 }
 
 Automaton34_2::~Automaton34_2() {
@@ -129,6 +131,7 @@ Automaton34_2::~Automaton34_2() {
   if (cuda_device_grid_curr) {
     cudaFree(cuda_device_grid_curr);
     cudaFree(cuda_device_grid_next);
+    cudaFree(cuda_device_live_blocks);
   }
 }
 
@@ -210,6 +213,15 @@ Automaton34_2::setup(int num_of_iters) {
   params.grid_width = grid->width;
   params.curr_grid = cuda_device_grid_curr;
   params.next_grid = cuda_device_grid_next;
+
+  // dimensions of the grid
+  dim3 grid_dim = get_grid_dim();
+
+  // setup the live block grid
+  cudaMalloc(&cuda_device_live_blocks, sizeof(live_block_t) * grid_dim.x * grid_dim.y);
+  // all blocks are initially live
+  cudaMemset(cuda_device_live_blocks, 1, sizeof(live_block_t) * grid_dim.x * grid_dim.y);
+  params.live_blocks = cuda_device_live_blocks;
 
   cudaMemcpyToSymbol(const_params, &params, sizeof(global_constants));
 }
@@ -295,18 +307,26 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
   grid->data = data;
 }
 
-void
-Automaton34_2::run_automaton() {
+dim3
+Automaton34_2::get_grid_dim() {
 
   // number of threads needed in the x and y directions
   // note that this is less than the width/height due to the border of unmodified cells
   int width_cells = grid->width - 2;
   int height_cells = grid->height - 2;
 
+  dim3 ans((width_cells + (THREAD_DIMX - 2) - 1) / (THREAD_DIMX - 2),
+              (height_cells + (THREAD_DIMY - 2) - 1) / (THREAD_DIMY - 2));
+  return ans;
+}
+
+void
+Automaton34_2::run_automaton() {
+
+
   // block/grid size for the pixel kernal
   dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
-  dim3 cell_grid_dim((width_cells + (cell_block_dim.x - 2) - 1) / (cell_block_dim.x - 2),
-              (height_cells + (cell_block_dim.y - 2) - 1) / (cell_block_dim.y - 2));
+  dim3 cell_grid_dim = get_grid_dim();
 
   for (int iter = 0; iter < num_iters; iter++) {
     kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
