@@ -19,8 +19,8 @@ void usage(const char* progname) {
   printf("  default: default.txt\n");
   printf("  -i  --iterations <INT>         Number of iterations in automotan\n");
   printf("  default: 1\n");
-  //printf("  -s --serial                 Run serial implementation\n");
-  //printf("  -d --display                Run in display mode\n");
+  printf("  -s --serial                 Run serial implementation\n");
+  printf("  -d --display                Run in display mode\n");
   printf("  -?  --help                 This message\n");
 }
 
@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     {0 ,0, 0, 0}
   };
 
-  while ((opt = getopt_long(argc, argv, "f:i:?:s", long_options, NULL)) != EOF) {
+  while ((opt = getopt_long(argc, argv, "f:i:?:sd", long_options, NULL)) != EOF) {
 
     switch (opt) {
     case 'f':
@@ -55,6 +55,9 @@ int main(int argc, char** argv)
       break;
     case 's':
       serial = 1;
+      break;
+    case 'd':
+      display = 1;
       break;
     case '?':
     default:
