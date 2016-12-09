@@ -55,11 +55,12 @@ __global__ void kernel_clear_grid() {
 
 // kernel_single_iteration (CUDA device code)
 //
-// compute a single iteration on the grid, putting the results in next_grid
+// compute a single iteration on the grid for 2 adjacent cells,
+// putting the results in next_grid
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
 
   // cells at border are not modified
-  int image_x = blockIdx.x * blockDim.x + threadIdx.x + 1;
+  int image_x = blockIdx.x * blockDim.x*2 + threadIdx.x*2 + 1;
   int image_y = blockIdx.y * blockDim.y + threadIdx.y + 1;
 
   int width = const_params.grid_width;
@@ -95,6 +96,38 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
 
     //const_params.next_grid[grid_index] = next_value;
     next_grid[grid_index] = next_value;
+
+    //now compute for the cell to the right
+    grid_index++;
+
+    // cells at border are not modified
+    if (image_x < width - 2) {
+
+      uint8_t live_neighbors = 0;
+
+      // compute the number of live_neighbors
+      // neighbors = index of {up, up-right, right, down, down-left, left}
+
+      for (int i = 0; i < 6; i++) {
+        //live_neighbors += const_params.curr_grid[neighbors[i]];
+        live_neighbors += curr_grid[neighbors[i] + 1];
+      }
+
+      //grid_elem curr_value = const_params.curr_grid[grid_index];
+      grid_elem curr_value = curr_grid[grid_index];
+      // values for the next iteration
+      grid_elem next_value;
+
+      if (!curr_value) {
+        next_value = (live_neighbors == 2);
+      } else {
+        next_value = (live_neighbors == 3 || live_neighbors == 4);
+      }
+
+      //const_params.next_grid[grid_index] = next_value;
+      next_grid[grid_index] = next_value;
+
+    }
   }
 
 }
@@ -294,7 +327,7 @@ Automaton34_2::run_automaton() {
 
   // block/grid size for the pixel kernal
   dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
-  dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
+  dim3 cell_grid_dim((width_cells + (cell_block_dim.x*2) - 1) / (cell_block_dim.x*2),
               (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
 
   for (int iter = 0; iter < num_iters; iter++) {
