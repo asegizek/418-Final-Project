@@ -12,15 +12,13 @@ Automaton34_2_Serial::Automaton34_2_Serial() {
 }
 
 Automaton34_2_Serial::~Automaton34_2_Serial() {
-  if (grid) {
-    delete grid->data;
-    delete grid;
-  }
   if (curr_grid) {
     delete curr_grid;
-  }
-  if (next_grid) {
     delete next_grid;
+  }
+  if (grid) {
+    if (grid->data != curr_grid) delete grid->data;
+    delete grid;
   }
 }
 

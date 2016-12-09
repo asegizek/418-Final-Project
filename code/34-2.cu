@@ -57,7 +57,6 @@ __global__ void kernel_clear_grid() {
 //
 // compute a single iteration on the grid, putting the results in next_grid
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
-
   // cells at border are not modified
   int image_x = blockIdx.x * blockDim.x + threadIdx.x + 1;
   int image_y = blockIdx.y * blockDim.y + threadIdx.y + 1;
@@ -70,14 +69,19 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
   // cells at border are not modified
   if (image_x >= width - 1 || image_y >= height - 1)
       return;
+    printf("inside kernel_single_iteration!\n");
 
   uint8_t live_neighbors = 0;
 
   // compute the number of live_neighbors
   // neighbors = index of {up, up-right, right, down, down-left, left}
-  int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
-                      grid_index + width, grid_index + width - 1, grid_index - 1};
+  // int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
+  //                    grid_index + width, grid_index + width - 1, grid_index - 1};
 
+  //depending on which row the cell is at it has 2 different neighbors?
+  int neighbor_offset = 2 * (image_y % 2) - 1;
+  int neighbors[] = {grid_index - 1, grid_index + 1, grid_index - width, grid_index + width, 
+                     grid_index - width + neighbor_offset, grid_index + width + neighbor_offset};
   for (int i = 0; i < 6; i++) {
     //live_neighbors += const_params.curr_grid[neighbors[i]];
     live_neighbors += curr_grid[neighbors[i]];
@@ -124,7 +128,7 @@ Automaton34_2::get_grid() {
   // need to copy contents of the final grid from device memory
   // before we expose it to the caller
 
-  printf("Copying grid data from device\n");
+  //printf("Copying grid data from device\n");
 
   cudaMemcpy(grid->data,
              cuda_device_grid_curr,
@@ -149,31 +153,7 @@ Automaton34_2::setup(int num_of_iters) {
   printf("Initializing CUDA for CudaRenderer\n");
   printf("Found %d CUDA devices\n", deviceCount);
 
-  for (int i=0; i<deviceCount; i++) {
-    cudaDeviceProp deviceProps;
-    cudaGetDeviceProperties(&deviceProps, i);
-    name = deviceProps.name;
-    if (name.compare("GeForce GTX 480") == 0
-        || name.compare("GeForce GTX 670") == 0
-        || name.compare("GeForce GTX 780") == 0)
-    {
-      isFastGPU = true;
-    }
 
-    printf("Device %d: %s\n", i, deviceProps.name);
-    printf("   SMs:        %d\n", deviceProps.multiProcessorCount);
-    printf("   Global mem: %.0f MB\n", static_cast<float>(deviceProps.totalGlobalMem) / (1024 * 1024));
-    printf("   CUDA Cap:   %d.%d\n", deviceProps.major, deviceProps.minor);
-
-    printf("---------------------------------------------------------\n");
-    if (!isFastGPU) {
-
-      printf("WARNING: "
-             "You're not running on a fast GPU, please consider using "
-             "NVIDIA GTX 480, 670 or 780.\n");
-      printf("---------------------------------------------------------\n");
-    }
-  }
 
   // By this time the scene should be loaded.  Now copy all the key
   // data structures into device memory so they are accessible to
@@ -291,3 +271,4 @@ Automaton34_2::run_automaton() {
     cuda_device_grid_next = temp;
   }
 }
+
