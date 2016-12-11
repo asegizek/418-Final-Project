@@ -7,17 +7,12 @@
 
 #include "automata.h"
 
-
 class Automaton34_2: public Automaton {
 
 
 public:
   Grid* grid;
   int num_iters;
-
-  grid_elem* cuda_device_grid_curr;
-  grid_elem* cuda_device_grid_next;
-
 
   Automaton34_2();
   virtual ~Automaton34_2();

@@ -3,7 +3,6 @@
 #include <math.h>
 #include <stdio.h>
 #include <vector>
-#include <thrust/scan.h>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -12,6 +11,11 @@
 #include "34-2.h"
 #include "util.h"
 
+#include <thrust/device_malloc.h>
+#include <thrust/device_free.h>
+#include <thrust/fill.h>
+#include <thrust/sequence.h>
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // Putting all the cuda kernels here
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -19,8 +23,8 @@
 struct global_constants {
   int grid_width;
   int grid_height;
-  grid_elem* curr_grid;
-  grid_elem* next_grid;
+  grid_elem *curr_grid;
+  grid_elem *next_grid;
 };
 
 // Global variable that is in scope, but read-only, for all cuda
@@ -29,6 +33,9 @@ struct global_constants {
 // about this type of memory in class, but constant memory is a fast
 // place to put read-only variables).
 __constant__ global_constants const_params;
+
+thrust::device_ptr<grid_elem> cuda_device_grid_curr;
+thrust::device_ptr<grid_elem> cuda_device_grid_next;
 
 // kernelClearGrid --  (CUDA device code)
 //
@@ -103,18 +110,14 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
 Automaton34_2::Automaton34_2() {
   num_iters = 0;
   grid = NULL;
-  cuda_device_grid_curr = NULL;
-  cuda_device_grid_next = NULL;
 }
 
 Automaton34_2::~Automaton34_2() {
   if (grid) {
     delete grid->data;
     delete grid;
-  }
-  if (cuda_device_grid_curr) {
-    cudaFree(cuda_device_grid_curr);
-    cudaFree(cuda_device_grid_next);
+    thrust::device_free(cuda_device_grid_curr);
+    thrust::device_free(cuda_device_grid_next);
   }
 }
 
@@ -127,7 +130,7 @@ Automaton34_2::get_grid() {
   printf("Copying grid data from device\n");
 
   cudaMemcpy(grid->data,
-             cuda_device_grid_curr,
+             cuda_device_grid_curr.get(),
              sizeof(grid_elem) * grid->width * grid->height,
              cudaMemcpyDeviceToHost);
 
@@ -183,19 +186,19 @@ Automaton34_2::setup(int num_of_iters) {
   // data structures into device memory so they are accessible to
   // CUDA kernels
 
-  cudaMalloc(&cuda_device_grid_curr, sizeof(grid_elem) * grid->width * grid->height);
-  cudaMalloc(&cuda_device_grid_next, sizeof(grid_elem) * grid->width * grid->height);
+  cuda_device_grid_curr = thrust::device_malloc<grid_elem>(grid->width * grid->height);
+  cuda_device_grid_next = thrust::device_malloc<grid_elem>(grid->width * grid->height);
 
-  cudaMemcpy(cuda_device_grid_curr, grid->data,
+  cudaMemcpy(cuda_device_grid_curr.get(), grid->data,
               sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyHostToDevice);
-  cudaMemset(cuda_device_grid_next, 0, sizeof(grid_elem) * grid->width * grid->height);
+  thrust::fill(cuda_device_grid_next, cuda_device_grid_next + grid->width*grid->height,0);
 
   // Initialize parameters in constant memory.
   global_constants params;
   params.grid_height = grid->height;
   params.grid_width = grid->width;
-  params.curr_grid = cuda_device_grid_curr;
-  params.next_grid = cuda_device_grid_next;
+  params.curr_grid = cuda_device_grid_curr.get();
+  params.next_grid = cuda_device_grid_next.get();
 
   cudaMemcpyToSymbol(const_params, &params, sizeof(global_constants));
 }
@@ -298,11 +301,12 @@ Automaton34_2::run_automaton() {
               (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
 
   for (int iter = 0; iter < num_iters; iter++) {
-    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
+    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>
+                      (cuda_device_grid_curr.get(), cuda_device_grid_next.get());
     cudaThreadSynchronize();
     //cudaMemcpy(cuda_device_grid_curr, cuda_device_grid_next,
       //sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
-    grid_elem* temp = cuda_device_grid_curr;
+    thrust::device_ptr<grid_elem> temp = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp;
 
