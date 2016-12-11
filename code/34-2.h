@@ -8,7 +8,9 @@
 #include "automata.h"
 
 // active_list elements should be big enough to hold every cell number
-typedef int active_list_t;
+typedef unsigned int active_list_t;
+// value of blank space in the active_list
+#define ALIST_BLANK UINT_MAX
 
 class Automaton34_2: public Automaton {
 
