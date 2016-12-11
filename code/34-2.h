@@ -7,6 +7,9 @@
 
 #include "automata.h"
 
+// active_list elements should be big enough to hold every cell number
+typedef int active_list_t;
+
 class Automaton34_2: public Automaton {
 
 

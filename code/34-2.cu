@@ -63,45 +63,52 @@ __global__ void kernel_clear_grid() {
 // kernel_single_iteration (CUDA device code)
 //
 // compute a single iteration on the grid, putting the results in next_grid
-__global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
+__global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid,
+                                        active_list_t* active_list,
+                                        size_t active_list_size) {
 
-  // cells at border are not modified
-  int image_x = blockIdx.x * blockDim.x + threadIdx.x + 1;
-  int image_y = blockIdx.y * blockDim.y + threadIdx.y + 1;
+  size_t active_list_index = blockIdx.x*blockDim.x + threadIdx.x;
 
-  int width = const_params.grid_width;
-  int height = const_params.grid_width;
-  // index in the grid of this thread
-  int grid_index = image_y*width + image_x;
+  // only operate on cells within the active list
+  if (active_list_index < active_list_size) {
 
-  // cells at border are not modified
-  if (image_x < width - 1 && image_y < height - 1) {
+    size_t grid_index = active_list[active_list_index];
 
-    uint8_t live_neighbors = 0;
+    int width = const_params.grid_width;
+    int height = const_params.grid_width;
 
-    // compute the number of live_neighbors
-    // neighbors = index of {up, up-right, right, down, down-left, left}
-    int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
-                        grid_index + width, grid_index + width - 1, grid_index - 1};
+    int pos_x = grid_index % width;
+    int pos_y = grid_index / width;
 
-    for (int i = 0; i < 6; i++) {
-      //live_neighbors += const_params.curr_grid[neighbors[i]];
-      live_neighbors += curr_grid[neighbors[i]];
+    // cells at border are not modified
+    if (0 < pos_x && pos_x < width - 1 && 0 < pos_y && pos_y < height - 1) {
+
+      uint8_t live_neighbors = 0;
+
+      // compute the number of live_neighbors
+      // neighbors = index of {up, up-right, right, down, down-left, left}
+      int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
+                          grid_index + width, grid_index + width - 1, grid_index - 1};
+
+      for (int i = 0; i < 6; i++) {
+        //live_neighbors += const_params.curr_grid[neighbors[i]];
+        live_neighbors += curr_grid[neighbors[i]];
+      }
+
+      //grid_elem curr_value = const_params.curr_grid[grid_index];
+      grid_elem curr_value = curr_grid[grid_index];
+      // values for the next iteration
+      grid_elem next_value;
+
+      if (!curr_value) {
+        next_value = (live_neighbors == 2);
+      } else {
+        next_value = (live_neighbors == 3 || live_neighbors == 4);
+      }
+
+      //const_params.next_grid[grid_index] = next_value;
+      next_grid[grid_index] = next_value;
     }
-
-    //grid_elem curr_value = const_params.curr_grid[grid_index];
-    grid_elem curr_value = curr_grid[grid_index];
-    // values for the next iteration
-    grid_elem next_value;
-
-    if (!curr_value) {
-      next_value = (live_neighbors == 2);
-    } else {
-      next_value = (live_neighbors == 3 || live_neighbors == 4);
-    }
-
-    //const_params.next_grid[grid_index] = next_value;
-    next_grid[grid_index] = next_value;
   }
 
 }
@@ -286,23 +293,36 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
 
 #define THREAD_DIMX 32
 #define THREAD_DIMY 8
+#define THREAD_DIM 256
+
+// amount of memory per thread in the cell list
+#define ACTIVE_LIST_STRIDE 9
 
 void
 Automaton34_2::run_automaton() {
 
-  // number of threads needed in the x and y directions
-  // note that this is less than the width/height due to the border of unmodified cells
-  int width_cells = grid->width - 2;
-  int height_cells = grid->height - 2;
+  // allocate memory for the list of cells that need to be checked
+  // set the space (total space the list takes up) to the maximum size needed
+  size_t active_list_space = grid->width * grid->height * ACTIVE_LIST_STRIDE;
+  thrust::device_ptr<active_list_t> active_list
+      = thrust::device_malloc<active_list_t>(active_list_space);
 
-  // block/grid size for the pixel kernal
-  dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
-  dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
-              (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
+  // current (dynamic) size of the active list
+  size_t active_list_size = grid->width*grid->height;
+
+  // add all the cells in the grid to the active list
+  thrust::sequence(active_list, active_list + active_list_size);
+
+  // block/grid size for the pixel kernel
+  dim3 cell_block_dim(THREAD_DIM);
+  dim3 cell_grid_dim;
 
   for (int iter = 0; iter < num_iters; iter++) {
+
+    cell_grid_dim = dim3((active_list_size + cell_block_dim.x - 1) / cell_block_dim.x);
     kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>
-                      (cuda_device_grid_curr.get(), cuda_device_grid_next.get());
+                      (cuda_device_grid_curr.get(), cuda_device_grid_next.get(),
+                       active_list.get(), active_list_size);
     cudaThreadSynchronize();
     //cudaMemcpy(cuda_device_grid_curr, cuda_device_grid_next,
       //sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
@@ -311,4 +331,7 @@ Automaton34_2::run_automaton() {
     cuda_device_grid_next = temp;
 
   }
+
+  // free allocated memory
+  thrust::device_free(active_list);
 }
