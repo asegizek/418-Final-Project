@@ -64,9 +64,6 @@ __global__ void kernel_clear_grid() {
   const_params.curr_grid[offset] = 0;
 }
 
-// amount of memory per thread in the cell list
-#define ACTIVE_LIST_STRIDE 9
-
 #define NUM_NEIGHBORS 6
 
 // kernel_single_iteration (CUDA device code)
@@ -74,7 +71,7 @@ __global__ void kernel_clear_grid() {
 // compute a single iteration on the grid, putting the results in next_grid
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid,
                                         active_list_t* active_list,
-                                        active_list_t* new_alist,
+                                        active_list_t* active_grid,
                                         size_t active_list_size){
 
   size_t active_list_index = blockIdx.x*blockDim.x + threadIdx.x;
@@ -93,8 +90,6 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
     // cells at border are not modified
     if (0 < pos_x && pos_x < width - 1 && 0 < pos_y && pos_y < height - 1
         && 0 < grid_index && grid_index < width*height) {
-
-      size_t new_alist_index = active_list_index*ACTIVE_LIST_STRIDE;
 
       uint8_t live_neighbors = 0;
 
@@ -125,16 +120,16 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
       //const_params.next_grid[grid_index] = next_value;
       next_grid[grid_index] = next_value;
 
-
-      // if the new cell is alive, add it and its neighbors to the new active_list
+      // if the new cell is alive, add it and its neighbors to the active_grid
       if (next_value) {
         // add neighbors
         for (int i = 0; i < NUM_NEIGHBORS; i++) {
-          new_alist[new_alist_index + i] = neighbors[i];
+          size_t neighbor_index = neighbors[i];
+          active_grid[neighbor_index] = neighbor_index;
         }
 
         // add yourself
-        new_alist[new_alist_index + NUM_NEIGHBORS] = grid_index;
+        active_grid[grid_index] = grid_index;
       }
 
     }
@@ -333,10 +328,10 @@ Automaton34_2::run_automaton() {
   thrust::device_ptr<active_list_t> active_list
       = thrust::device_malloc<active_list_t>(active_list_space);
 
-  // allocate space for an active_list for the next cycle
-  size_t new_alist_space = active_list_space*ACTIVE_LIST_STRIDE;
-  thrust::device_ptr<active_list_t> new_alist
-      = thrust::device_malloc<active_list_t>(new_alist_space);
+  // allocate space for the grid of active cells
+  size_t active_grid_space = grid->width*grid->height;
+  thrust::device_ptr<active_list_t> active_grid
+      = thrust::device_malloc<active_list_t>(active_grid_space);
 
   // current (dynamic) size of the active list
   size_t active_list_size = grid->width*grid->height;
@@ -349,22 +344,20 @@ Automaton34_2::run_automaton() {
   dim3 cell_grid_dim;
 
   // used for timing
-  time_t a_start, a_end, b_start, b_end;
-  time_t a_tot = 0;
-  time_t b_tot = 0;
+  //time_t a_start, a_end, b_start, b_end;
+  //time_t a_tot = 0;
+  //time_t b_tot = 0;
 
   for (int iter = 0; iter < num_iters; iter++) {
 
-    a_start = clock();
-
-    size_t new_alist_size = active_list_size * ACTIVE_LIST_STRIDE;
+    //a_start = clock();
 
     // zero out the new grid
     thrust::fill(cuda_device_grid_next, cuda_device_grid_next
                   + grid->width*grid->height, 0);
 
-    // zero out the part of the new_alist which will be worked on
-    thrust::fill(new_alist, new_alist + new_alist_size, ALIST_BLANK);
+    // zero out the active_grid
+    thrust::fill(active_grid, active_grid + active_grid_space, ALIST_BLANK);
 
     // reset the grid dimensions to reflect the new number of values which must be
     // computed on
@@ -372,26 +365,13 @@ Automaton34_2::run_automaton() {
 
     kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>
                       (cuda_device_grid_curr.get(), cuda_device_grid_next.get(),
-                       active_list.get(), new_alist.get(), active_list_size);
+                       active_list.get(), active_grid.get(), active_list_size);
     cudaThreadSynchronize();
 
-    // remove extraneous ALIST_BLANK elements from the new_alist
-    thrust::device_ptr<active_list_t> new_end_remove =
-      thrust::remove(new_alist, new_alist + new_alist_size, ALIST_BLANK);
-    new_alist_size = new_end_remove - new_alist;
-
-    a_end = clock();
-    a_tot += a_end - a_start;
-    b_start = clock();
-
-    // sort the values in the new_alist
-    thrust::sort(new_alist, new_alist + new_alist_size);
-
-    // remove duplicates from the new_alist and copy it into the active list
-    thrust::device_ptr<active_list_t> new_end_unique =
-      thrust::unique_copy(new_alist, new_alist + new_alist_size, active_list);
-
-    active_list_size = min(active_list_space, new_end_unique - active_list);
+    // copy all the active cells in the grid into the active list
+    thrust::device_ptr<active_list_t> new_end_remove = thrust::remove_copy(active_grid,
+                              active_grid + active_grid_space, active_list, ALIST_BLANK);
+    active_list_size = new_end_remove - active_list;
 
     // swap the current and next pointers for the next iteration
     // this gets rid of the need to copy values between the 2 grids
@@ -399,16 +379,16 @@ Automaton34_2::run_automaton() {
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp1;
 
-    b_end = clock();
-    b_tot += b_end - b_start;
+    //a_end = clock();
+    //a_tot += a_end - a_start;
+    //b_tot += b_end - b_start;
   }
 
   // free allocated memory
   thrust::device_free(active_list);
-  thrust::device_free(new_alist);
 
-  double a_time = double(a_tot) / CLOCKS_PER_SEC;
-  double b_time = double(b_tot) / CLOCKS_PER_SEC;
-  printf("a time: %f s\n", a_time);
-  printf("a time: %f s\n", b_time);
+  //double a_time = double(a_tot) / CLOCKS_PER_SEC;
+  //double b_time = double(b_tot) / CLOCKS_PER_SEC;
+  //printf("a time: %f s\n", a_time);
+  //printf("b time: %f s\n", b_time);
 }
