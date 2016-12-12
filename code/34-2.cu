@@ -318,6 +318,7 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
 void
 Automaton34_2::run_automaton() {
 
+  printf("width: %d height: %d\n", grid->width, grid->height);
 
   // allocate memory for the list of cells that need to be checked
   // set the space (total space the list takes up) to the maximum size needed
@@ -343,17 +344,34 @@ Automaton34_2::run_automaton() {
   for (int iter = 0; iter < num_iters; iter++) {
 
     // for debugging
-    // grid_elem *tmp = new grid_elem[grid->width*grid->height];
-    // cudaMemcpy(tmp,
-    //   cuda_device_grid_curr.get(),
-    //   sizeof(grid_elem) * grid->width * grid->height,
-    //   cudaMemcpyDeviceToHost);
-    // for (int i = 0; i < grid->width*grid->height; i++) {
-    //   if (i % grid->width == 0) printf("\n");
-    //   printf("%d ", tmp[i]);
-    // }
-    // printf("\n\n");
-    // delete tmp;
+    printf("iteration: %d\n\n", iter);
+    //grid_elem *tmp = new grid_elem[grid->width*grid->height];
+    //cudaMemcpy(tmp,
+    //  cuda_device_grid_curr.get(),
+    //  sizeof(grid_elem) * grid->width * grid->height,
+    //  cudaMemcpyDeviceToHost);
+    //for (int i = 0; i < grid->width*grid->height; i++) {
+    //  if (i % grid->width == 0) printf("\n");
+    //  printf("%d ", tmp[i]);
+    //}
+    //printf("\n\n");
+    //delete tmp[];
+
+    // for debugging
+    //active_list_t *tmpa = new active_list_t[active_list_size];
+    //cudaMemcpy(tmpa,
+    //  active_list.get(),
+    //  sizeof(active_list_t) * active_list_size,
+    //  cudaMemcpyDeviceToHost);
+    //for (size_t i = 0; i < active_list_size; i++) {
+    //  int ind = tmpa[i];
+    //  int xp = ind / grid->width;
+    //  int yp = ind % grid->width;
+    //  printf("ind: %d y: %d x: %d\n", ind, yp, xp);
+    //}
+    //printf("\n\n");
+    //delete[] tmpa;
+
 
     size_t new_alist_size = active_list_size * ACTIVE_LIST_STRIDE;
 
@@ -376,13 +394,14 @@ Automaton34_2::run_automaton() {
     thrust::device_ptr<active_list_t> new_end =
       thrust::unique_copy(new_alist, new_alist + new_alist_size, active_list);
 
-    active_list_size = min(active_list_space, new_end - new_alist);
+    active_list_size = min(active_list_space, new_end - active_list);
 
     // swap the current and next pointers for the next iteration
     // this gets rid of the need to copy values between the 2 grids
     thrust::device_ptr<grid_elem> temp1 = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp1;
+
   }
 
   // free allocated memory
