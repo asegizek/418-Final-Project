@@ -128,6 +128,7 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
         // add yourself
         new_alist[new_alist_index + NUM_NEIGHBORS] = grid_index;
       }
+
     }
   }
 }
@@ -320,13 +321,14 @@ Automaton34_2::run_automaton() {
 
   // allocate memory for the list of cells that need to be checked
   // set the space (total space the list takes up) to the maximum size needed
-  size_t active_list_space = grid->width * grid->height * ACTIVE_LIST_STRIDE;
+  size_t active_list_space = grid->width * grid->height;
   thrust::device_ptr<active_list_t> active_list
       = thrust::device_malloc<active_list_t>(active_list_space);
 
   // allocate space for an active_list for the next cycle
+  size_t new_alist_space = active_list_space*ACTIVE_LIST_STRIDE;
   thrust::device_ptr<active_list_t> new_alist
-      = thrust::device_malloc<active_list_t>(active_list_space);
+      = thrust::device_malloc<active_list_t>(new_alist_space);
 
   // current (dynamic) size of the active list
   size_t active_list_size = grid->width*grid->height;
@@ -357,23 +359,17 @@ Automaton34_2::run_automaton() {
     // sort the values in the new_alist
     thrust::sort(new_alist, new_alist + new_alist_size);
 
-    // remove duplicates from the new_alist
+    // remove duplicates from the new_alist and copy it into the active list
     thrust::device_ptr<active_list_t> new_end =
-      thrust::unique(new_alist, new_alist + new_alist_size);
+      thrust::unique_copy(new_alist, new_alist + new_alist_size, active_list);
 
-    active_list_size = min(active_list_space/ACTIVE_LIST_STRIDE, new_end - new_alist);
+    active_list_size = min(active_list_space, new_end - new_alist);
 
     // swap the current and next pointers for the next iteration
     // this gets rid of the need to copy values between the 2 grids
     thrust::device_ptr<grid_elem> temp1 = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp1;
-
-    // swap the current active list pointer with the new one
-    thrust::device_ptr<active_list_t> temp2 = active_list;
-    active_list = new_alist;
-    new_alist = temp2;
-
   }
 
   // free allocated memory
