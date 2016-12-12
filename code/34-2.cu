@@ -17,6 +17,7 @@
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/unique.h>
+#include <thrust/remove.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // Putting all the cuda kernels here
@@ -366,14 +367,19 @@ Automaton34_2::run_automaton() {
                        active_list.get(), new_alist.get(), active_list_size);
     cudaThreadSynchronize();
 
+    // remove extraneous ALIST_BLANK elements from the new_alist
+    thrust::device_ptr<active_list_t> new_end_remove =
+      thrust::remove(new_alist, new_alist + new_alist_size, ALIST_BLANK);
+    new_alist_size = new_end_remove - new_alist;
+
     // sort the values in the new_alist
     thrust::sort(new_alist, new_alist + new_alist_size);
 
     // remove duplicates from the new_alist and copy it into the active list
-    thrust::device_ptr<active_list_t> new_end =
+    thrust::device_ptr<active_list_t> new_end_unique =
       thrust::unique_copy(new_alist, new_alist + new_alist_size, active_list);
 
-    active_list_size = min(active_list_space, new_end - active_list);
+    active_list_size = min(active_list_space, new_end_unique - active_list);
 
     // swap the current and next pointers for the next iteration
     // this gets rid of the need to copy values between the 2 grids
