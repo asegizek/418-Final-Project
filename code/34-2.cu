@@ -88,7 +88,8 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
     int pos_y = grid_index / width;
 
     // cells at border are not modified
-    if (0 < pos_x && pos_x < width - 1 && 0 < pos_y && pos_y < height - 1) {
+    if (0 < pos_x && pos_x < width - 1 && 0 < pos_y && pos_y < height - 1
+        && 0 < grid_index && grid_index < width*height) {
 
       size_t new_alist_index = active_list_index*ACTIVE_LIST_STRIDE;
 
@@ -115,8 +116,12 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
         next_value = (live_neighbors == 3 || live_neighbors == 4);
       }
 
+      if (pos_x == 1 && pos_y == 1 && next_value != 0)
+        next_value = 7;
+
       //const_params.next_grid[grid_index] = next_value;
       next_grid[grid_index] = next_value;
+
 
       // if the new cell is alive, add it and its neighbors to the new active_list
       if (next_value) {
@@ -318,7 +323,6 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
 void
 Automaton34_2::run_automaton() {
 
-  printf("width: %d height: %d\n", grid->width, grid->height);
 
   // allocate memory for the list of cells that need to be checked
   // set the space (total space the list takes up) to the maximum size needed
@@ -343,37 +347,12 @@ Automaton34_2::run_automaton() {
 
   for (int iter = 0; iter < num_iters; iter++) {
 
-    // for debugging
-    printf("iteration: %d\n\n", iter);
-    //grid_elem *tmp = new grid_elem[grid->width*grid->height];
-    //cudaMemcpy(tmp,
-    //  cuda_device_grid_curr.get(),
-    //  sizeof(grid_elem) * grid->width * grid->height,
-    //  cudaMemcpyDeviceToHost);
-    //for (int i = 0; i < grid->width*grid->height; i++) {
-    //  if (i % grid->width == 0) printf("\n");
-    //  printf("%d ", tmp[i]);
-    //}
-    //printf("\n\n");
-    //delete tmp[];
-
-    // for debugging
-    //active_list_t *tmpa = new active_list_t[active_list_size];
-    //cudaMemcpy(tmpa,
-    //  active_list.get(),
-    //  sizeof(active_list_t) * active_list_size,
-    //  cudaMemcpyDeviceToHost);
-    //for (size_t i = 0; i < active_list_size; i++) {
-    //  int ind = tmpa[i];
-    //  int xp = ind / grid->width;
-    //  int yp = ind % grid->width;
-    //  printf("ind: %d y: %d x: %d\n", ind, yp, xp);
-    //}
-    //printf("\n\n");
-    //delete[] tmpa;
-
 
     size_t new_alist_size = active_list_size * ACTIVE_LIST_STRIDE;
+
+    // zero out the new grid
+    thrust::fill(cuda_device_grid_next, cuda_device_grid_next
+                  + grid->width*grid->height, 0);
 
     // zero out the part of the new_alist which will be worked on
     thrust::fill(new_alist, new_alist + new_alist_size, ALIST_BLANK);
