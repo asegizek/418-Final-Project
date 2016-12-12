@@ -1,9 +1,9 @@
 #ifndef __AUTOMATON_34_2__
 #define __AUTOMATON_34_2__
 
-#ifndef uint
-#define uint unsigned int
-#endif
+// #ifndef uint
+// #define uint unsigned int
+// #endif
 
 #include "automata.h"
 
@@ -31,6 +31,8 @@ public:
   void update_cells();
   
   void run_automaton();
+
+  void set_rule(Rule *rule);
 
 };
 

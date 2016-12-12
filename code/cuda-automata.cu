@@ -30,7 +30,18 @@ struct global_constants {
 __constant__ global_constants const_params;
 
 
+__device__ grid_elem local_update_cell(grid_elem cell, grid_elem *neighbors) {
+  printf("calling update_cell!\n");
+  int live_neighbors = 0;
+  for (int i = 0; i < 6; i++) {
+    live_neighbors += neighbors[i];
+  }
+  grid_elem new_cell;
 
+  if (cell == 0) new_cell = (live_neighbors == 2);
+  else new_cell = (live_neighbors == 3 || live_neighbors == 4);
+  return new_cell;
+}
 
 
 // kernelClearGrid --  (CUDA device code)
@@ -94,7 +105,7 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
   grid_elem curr_value = curr_grid[grid_index];
   // values for the next iteration
   printf("hello from cuda automata!\n");
-  grid_elem next_value = update_cell(curr_value, neighbors);
+  grid_elem next_value = local_update_cell(curr_value, neighbors);//update_cell(curr_value, neighbors);
   //grid_elem next_value = 0;
   //const_params.next_grid[grid_index] = next_value;
   next_grid[grid_index] = next_value;
@@ -135,6 +146,12 @@ Automaton34_2::get_grid() {
 
   return grid;
 }
+
+void Automaton34_2::set_rule(Rule *rule) {
+  printf("automaton cuda called!: num_alive: %d, num_dead: %d", rule->num_alive, rule->num_dead);
+  return;
+}
+
 
 void
 Automaton34_2::setup(int num_of_iters) {

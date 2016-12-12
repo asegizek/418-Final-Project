@@ -1,7 +1,7 @@
 
 EXECUTABLE := automata
 
-CU_FILES   := plugins.cu cuda-automata.cu
+CU_FILES   := 34-2.cu
 
 CU_DEPS    :=
 
@@ -38,7 +38,7 @@ LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
 
 NVCC=nvcc
 
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/plugins.o $(OBJDIR)/cuda-automata.o $(OBJDIR)/34-2-serial.o $(OBJDIR)/display.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/34-2.o $(OBJDIR)/34-2-serial.o $(OBJDIR)/display.o
 
 
 .PHONY: dirs clean

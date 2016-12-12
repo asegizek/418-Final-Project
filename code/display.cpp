@@ -81,15 +81,15 @@ void displayHexagons(void) {
     glColor3f(0.0, 1.0, 0.0);
     int rows = gData.rows;
     int cols = gData.cols;
-    float h_width = 1.0f/ ((float)(cols+0.5f));
+    float h_width = 1.0f/ ((float)((cols-2)+0.5f));
     //quarter of the hexagon height
-    float h_qheight = 1.0f / (float)(4+(rows-1)*3);
+    float h_qheight = 1.0f / (float)(4+((rows-2)-1)*3);
     Grid* grid = gData.automaton->get_grid();
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
+    for (int i = 0; i < rows-2; i++) {
+        for (int j = 0; j < cols-2; j++) {
             float cx = (i%2 == 1) ? (j+0.5f)*h_width : (j+1.0f)*h_width;
             float cy = (2+3*i)*h_qheight;
-            int grid_val = grid->data[i*rows + j];
+            int grid_val = grid->data[(i+1)*rows + (j+1)];
             float r = (grid_val) ? 0.0f : 1.0f;
             glColor3f(r, 1.0f, 1.0f);
 
@@ -159,6 +159,48 @@ void displayHexagonsSlanted(void) {
     glutPostRedisplay();
 }
 
+void displayHexagonsSlantedPacked(void) {
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColor3f(0.0, 1.0, 0.0);
+    Grid* grid = gData.automaton->get_grid();
+    int rows = gData.rows;
+    int cols = gData.cols;
+    float h_width = 1.0f/ ((float)(cols + (rows - 1) * 0.5f));
+    //quarter of the hexagon height
+    float h_qheight = 1.0f / (float)(4+(rows-1)*3);
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            float cx = (j + (i + 1) * 0.5f) * h_width;
+            float cy = (2+3*i)*h_qheight;
+            grid_elem grid_val = grid->data[i*rows + j];
+            float r = (grid_val) ? 0.0f : 1.0f;
+            glColor3f(r, 1.0f, 1.0f);
+
+            glBegin(GL_POLYGON);
+            glVertex2f(cx-h_width/2, cy-h_qheight);
+            glVertex2f(cx          , cy-2*h_qheight);
+            glVertex2f(cx+h_width/2, cy-h_qheight);
+            glVertex2f(cx+h_width/2, cy+h_qheight);
+            glVertex2f(cx          , cy+2*h_qheight);
+            glVertex2f(cx-h_width/2, cy+h_qheight);
+            glEnd();
+            glColor3f(0.0f, 0.0f, 0.0f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(cx-h_width/2, cy-h_qheight);
+            glVertex2f(cx          , cy-2*h_qheight);
+            glVertex2f(cx+h_width/2, cy-h_qheight);
+            glVertex2f(cx+h_width/2, cy+h_qheight);
+            glVertex2f(cx          , cy+2*h_qheight);
+            glVertex2f(cx-h_width/2, cy+h_qheight);
+            glEnd();
+
+        }
+    }
+    glFlush();
+    glutSwapBuffers();
+    glutPostRedisplay();
+}
+
 void handleKeyPress(unsigned char key, int x , int y) {
     switch(key) {
     case 'n':
@@ -175,7 +217,7 @@ void startRenderer(Automaton* automaton, int rows, int cols) {
     glutCreateWindow("Drawing hexagons");
     glutInitWindowSize(1280, 960);
 
-    glutDisplayFunc(displayHexagons);
+    glutDisplayFunc(displayHexagonsSlantedPacked);
     glutReshapeFunc(reshape);
     glutKeyboardFunc(handleKeyPress);
     glutMainLoop();

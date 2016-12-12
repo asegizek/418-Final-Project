@@ -2,7 +2,7 @@
 #define __AUTOMATA__
 
 #include "grid.h"
-
+#include "rule.h"
 
 class Automaton {
 
@@ -19,6 +19,8 @@ public:
     virtual void update_cells() = 0;
 
     virtual void run_automaton() = 0;
+
+    virtual void set_rule(Rule *rule) = 0;
 
     //virtual void dumpParticles(const char* filename) {}
 

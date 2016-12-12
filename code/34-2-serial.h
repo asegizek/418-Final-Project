@@ -10,6 +10,7 @@ class Automaton34_2_Serial: public Automaton{
         int num_iters;
         grid_elem* curr_grid;
         grid_elem* next_grid;
+        Rule* rule;
         Automaton34_2_Serial();
         virtual ~Automaton34_2_Serial();
         Grid* get_grid();
@@ -17,6 +18,7 @@ class Automaton34_2_Serial: public Automaton{
         void create_grid(char *filename);
         void update_cells();
         void run_automaton();
+        void set_rule(Rule *rule);
 };
 
 #endif

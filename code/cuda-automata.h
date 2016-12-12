@@ -7,7 +7,6 @@
 
 #include "automata.h"
 
-
 class Automaton34_2: public Automaton {
 
 
@@ -31,6 +30,8 @@ public:
   void update_cells();
   
   void run_automaton();
+
+  void set_rule(Rule *rule);
 
 };
 
