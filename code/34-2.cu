@@ -19,6 +19,8 @@
 #include <thrust/unique.h>
 #include <thrust/remove.h>
 
+#include <ctime>
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // Putting all the cuda kernels here
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -346,8 +348,14 @@ Automaton34_2::run_automaton() {
   dim3 cell_block_dim(THREAD_DIM);
   dim3 cell_grid_dim;
 
+  // used for timing
+  time_t a_start, a_end, b_start, b_end;
+  time_t a_tot = 0;
+  time_t b_tot = 0;
+
   for (int iter = 0; iter < num_iters; iter++) {
 
+    a_start = clock();
 
     size_t new_alist_size = active_list_size * ACTIVE_LIST_STRIDE;
 
@@ -372,6 +380,10 @@ Automaton34_2::run_automaton() {
       thrust::remove(new_alist, new_alist + new_alist_size, ALIST_BLANK);
     new_alist_size = new_end_remove - new_alist;
 
+    a_end = clock();
+    a_tot += a_end - a_start;
+    b_start = clock();
+
     // sort the values in the new_alist
     thrust::sort(new_alist, new_alist + new_alist_size);
 
@@ -387,9 +399,16 @@ Automaton34_2::run_automaton() {
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp1;
 
+    b_end = clock();
+    b_tot += b_end - b_start;
   }
 
   // free allocated memory
   thrust::device_free(active_list);
   thrust::device_free(new_alist);
+
+  double a_time = double(a_tot) / CLOCKS_PER_SEC;
+  double b_time = double(b_tot) / CLOCKS_PER_SEC;
+  printf("a time: %f s\n", a_time);
+  printf("a time: %f s\n", b_time);
 }
