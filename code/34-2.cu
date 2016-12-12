@@ -268,7 +268,7 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
   // increase grid size to account for border cells
   width += 2;
   height += 2;
-  data = new grid_elem [width*height];
+  data = new grid_elem [width*height]();
 
   // insert data from file into grid
 
@@ -341,6 +341,19 @@ Automaton34_2::run_automaton() {
   dim3 cell_grid_dim;
 
   for (int iter = 0; iter < num_iters; iter++) {
+
+    // for debugging
+    // grid_elem *tmp = new grid_elem[grid->width*grid->height];
+    // cudaMemcpy(tmp,
+    //   cuda_device_grid_curr.get(),
+    //   sizeof(grid_elem) * grid->width * grid->height,
+    //   cudaMemcpyDeviceToHost);
+    // for (int i = 0; i < grid->width*grid->height; i++) {
+    //   if (i % grid->width == 0) printf("\n");
+    //   printf("%d ", tmp[i]);
+    // }
+    // printf("\n\n");
+    // delete tmp;
 
     size_t new_alist_size = active_list_size * ACTIVE_LIST_STRIDE;
 
