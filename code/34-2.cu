@@ -376,9 +376,6 @@ Automaton34_2::run_automaton() {
 
   for (int iter = 0; iter < num_iters; iter++) {
 
-    //print("list size: %d\n", active_list_size;
-    //a_start = clock();
-
     // zero out the new grid
     thrust::fill(cuda_device_grid_next, cuda_device_grid_next
                   + grid->width*grid->height, 0);
@@ -402,7 +399,7 @@ Automaton34_2::run_automaton() {
                                 / alist_block_dim.x);
 
     // create the active list using the active grid
-    kernel_create_active_list<<<alist_grid_dim, alist_grid_dim>>>
+    kernel_create_active_list<<<alist_grid_dim, alist_block_dim>>>
       (active_grid.get(), active_list.get());
 
     // copy in the new size of the active list from the last value in the active grid
