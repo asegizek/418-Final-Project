@@ -19,8 +19,10 @@
 struct global_constants {
   int grid_width;
   int grid_height;
+  int num_cols;
   grid_elem* curr_grid;
   grid_elem* next_grid;
+  grid_elem* lookup_table;
 };
 
 // Global variable that is in scope, but read-only, for all cuda
@@ -59,44 +61,70 @@ __global__ void kernel_clear_grid() {
 __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_grid) {
 
   // cells at border are not modified
-  int image_x = blockIdx.x * blockDim.x + threadIdx.x + 1;
-  int image_y = blockIdx.y * blockDim.y + threadIdx.y + 1;
+  int x = blockIdx.x * blockDim.x + threadIdx.x + 1;
+  int y = blockIdx.y * blockDim.y + threadIdx.y + 1;
 
   int width = const_params.grid_width;
-  int height = const_params.grid_width;
+  int height = const_params.grid_height;
+  int cols = const_params.num_cols;
   // index in the grid of this thread
-  int grid_index = image_y*width + image_x;
+  int grid_index = y*cols + x;
 
   // cells at border are not modified
-  if (image_x < width - 1 && image_y < height - 1) {
+  if (x >= cols - 1 || y >= height - 1)
+      return;
+  int curr_col = x - 1;
+  int y_above = y - 1 ;
+  int y_below = y + 1;
 
-    uint8_t live_neighbors = 0;
+  int buffer_top = 0;
+  int buffer_mid = curr_grid[curr_col + cols*y] << 16;
+  int buffer_bot= curr_grid[curr_col + cols*y_below] << 16;
+    //increment current col
+  curr_col++;
 
-    // compute the number of live_neighbors
-    // neighbors = index of {up, up-right, right, down, down-left, left}
-    int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
-                        grid_index + width, grid_index + width - 1, grid_index - 1};
+  buffer_top  = curr_grid[curr_col + cols*y_above] << 8;
+  buffer_mid |= curr_grid[curr_col + cols*y] << 8;
+  buffer_bot |= curr_grid[curr_col + cols*y_below] << 8;
 
-    for (int i = 0; i < 6; i++) {
-      //live_neighbors += const_params.curr_grid[neighbors[i]];
-      live_neighbors += curr_grid[neighbors[i]];
+      //grab values from the right column
+  curr_col++;
+
+  buffer_top |= curr_grid[curr_col + cols*y_above];
+  buffer_mid |= curr_grid[curr_col + cols*y];
+
+  grid_elem new_val = 0;
+
+
+  int left_half = (buffer_top & 0xf800) | ((buffer_mid & 0x1f800) >> 6) | ((buffer_bot & 0x1f000) >> 12);
+  int right_half = ((buffer_top & 0xf80) << 4) | ((buffer_mid) & 0x1f80) >> 2 | ((buffer_bot & 0x1f00) >> 8);
+
+  //left val and right val each contain 4 cells/bits
+  grid_elem left_val = const_params.lookup_table[left_half];
+  grid_elem right_val = const_params.lookup_table[right_half];
+  new_val = (left_val << 4) | right_val;
+
+  next_grid[grid_index] = new_val;
+}
+
+
+//computes and stores the lookup table given the next_state rule table
+grid_elem* create_lookup_table(grid_elem* next_state) {
+  grid_elem* table = (grid_elem*) malloc(sizeof(grid_elem) * (1<<16));
+  int max = 1<<16;
+  for (int num = 0; num < max; num++) {
+    int i = num;
+    grid_elem res = 0;
+    for (int j = 0; j < 4; j++) {
+        int center = ((i >> 6) & 1);
+        int live_neighbors  = (i & 1) + ((i >> 1) & 1) + ((i >> 5) & 1) + ((i >> 7) & 1) + ((i >> 11) & 1) + ((i >> 12) & 1);
+        int alive = next_state[live_neighbors + center*7];
+        res |= alive << j;
+        i >>= 1;
     }
-
-    //grid_elem curr_value = const_params.curr_grid[grid_index];
-    grid_elem curr_value = curr_grid[grid_index];
-    // values for the next iteration
-    grid_elem next_value;
-
-    if (!curr_value) {
-      next_value = (live_neighbors == 2);
-    } else {
-      next_value = (live_neighbors == 3 || live_neighbors == 4);
-    }
-
-    //const_params.next_grid[grid_index] = next_value;
-    next_grid[grid_index] = next_value;
+    table[num] = res;
   }
-
+  return table;
 }
 
 
@@ -105,6 +133,7 @@ Automaton34_2::Automaton34_2() {
   grid = NULL;
   cuda_device_grid_curr = NULL;
   cuda_device_grid_next = NULL;
+  cuda_device_lookup_table = NULL;
 }
 
 Automaton34_2::~Automaton34_2() {
@@ -115,6 +144,7 @@ Automaton34_2::~Automaton34_2() {
   if (cuda_device_grid_curr) {
     cudaFree(cuda_device_grid_curr);
     cudaFree(cuda_device_grid_next);
+    cudaFree(cuda_device_lookup_table);
   }
 }
 
@@ -124,14 +154,23 @@ Automaton34_2::get_grid() {
   // need to copy contents of the final grid from device memory
   // before we expose it to the caller
 
-  printf("Copying grid data from device\n");
 
   cudaMemcpy(grid->data,
              cuda_device_grid_curr,
-             sizeof(grid_elem) * grid->width * grid->height,
+             sizeof(grid_elem) * grid->num_cols * grid->height,
              cudaMemcpyDeviceToHost);
-
-  return grid;
+  Grid *unpacked = new Grid(grid->width+2, grid->height);
+  unpacked->blank();
+  for (int y = 1; y < grid->height-1; y++) {
+    for (int x = 0; x < grid->width; x++) {
+      //magic number 8 (byte size)
+      int grid_index = (x / 8) + y*grid->num_cols + 1;
+      grid_elem block = grid->data[grid_index];
+      grid_elem val = (block >> (7 - (x % 8))) & 1;
+      unpacked->data[x + 1 + (y)*unpacked->width] = val;
+    }
+  }
+  return unpacked;
 }
 
 void
@@ -183,36 +222,37 @@ Automaton34_2::setup(int num_of_iters) {
   // data structures into device memory so they are accessible to
   // CUDA kernels
 
-  cudaMalloc(&cuda_device_grid_curr, sizeof(grid_elem) * grid->width * grid->height);
-  cudaMalloc(&cuda_device_grid_next, sizeof(grid_elem) * grid->width * grid->height);
+  //create lookup table
+  grid_elem* lookup_table = create_lookup_table(rule->next_state);
+
+  cudaMalloc(&cuda_device_grid_curr, sizeof(grid_elem) * grid->num_cols * grid->height);
+  cudaMalloc(&cuda_device_grid_next, sizeof(grid_elem) * grid->num_cols* grid->height);
+  cudaMalloc(&cuda_device_lookup_table, sizeof(grid_elem) * (1 << 16));
 
   cudaMemcpy(cuda_device_grid_curr, grid->data,
-              sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyHostToDevice);
-  cudaMemset(cuda_device_grid_next, 0, sizeof(grid_elem) * grid->width * grid->height);
+              sizeof(grid_elem) * grid->num_cols * grid->height, cudaMemcpyHostToDevice);
+  cudaMemset(cuda_device_grid_next, 0, sizeof(grid_elem) * grid->num_cols * grid->height);
+  cudaMemcpy(cuda_device_lookup_table, lookup_table, sizeof(grid_elem) * (1 << 16), cudaMemcpyHostToDevice);
 
   // Initialize parameters in constant memory.
   global_constants params;
   params.grid_height = grid->height;
   params.grid_width = grid->width;
+  params.num_cols = grid->num_cols;
   params.curr_grid = cuda_device_grid_curr;
   params.next_grid = cuda_device_grid_next;
-
+  params.lookup_table = cuda_device_lookup_table;
   cudaMemcpyToSymbol(const_params, &params, sizeof(global_constants));
 }
 
 
 // create the initial grid using the input file
 //
-// pattern_x and pattern_y determine how many times the input grid is repeated in the
-// x and y directions
-//
-// if zeroed is true than all the patterns are zeroed out
-void
-Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zeroed) {
 
+void
+Automaton34_2::create_grid(char *filename) {
   FILE *input = NULL;
-  int width, height; // width and height of entire image
-  int section_width, section_height; // width and height of the input grid
+  int width, height;
   grid_elem *data;
 
   input = fopen(filename, "r");
@@ -222,89 +262,91 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
     exit(1);
   }
 
-  // copy in width and height from file
-  if (fscanf(input, "%d %d\n", &section_width, &section_height) != 2) {
+      //copy in width and height
+  if (fscanf(input, "%d %d\n", &width, &height) != 2) {
     fclose(input);
     printf("Invalid input\n");
     printf("\nTerminating program\n");
     exit(1);
   }
-
-  width = section_width*pattern_x;
-  height = section_height*pattern_y;
-
-  printf("Width: %d\nHeight: %d\n", width, height);
-
-  // increase grid size to account for border cells
-  width += 2;
+  //note 8 is a magic number set it to the size of a byte
+  int num_cols = (width + 7) / 8;
+  //add border cells
   height += 2;
-  data = new grid_elem [width*height];
-
+  num_cols += 2;
+  data = new grid_elem [num_cols*height];
   // insert data from file into grid
-
-  // section_y and section_x represent the position in one individual 'pattern'
-  for (int section_y = 0; section_y < section_height; section_y++) {
-    for (int section_x = 0; section_x < section_width; section_x++) {
-
-      int temp;
-      if (fscanf(input, "%d", &temp) != 1) {
+  int grid_index = 0;
+  int temp;
+  for (int y = 1; y < height-1; y++) {
+    //block contains 8 cells in a row
+    grid_elem block = 0;
+    for (int x = 0; x < width; x++) {
+       if (fscanf(input, "%d", &temp) != 1) {
         fclose(input);
         printf("Invalid input\n");
         printf("\nTerminating program\n");
         exit(1);
       }
-
-      // write value for each pattern
-      // py and px represent the current pattern we are in
-      for (int py = 0; py < pattern_y; py++) {
-        for (int px = 0; px < pattern_x; px++) {
-
-          int y_index = py*section_height + section_y + 1;
-          int x_index = px*section_width + section_x + 1;
-
-          // zeroed means that all cells outside of the initial pattern are zeroed out
-          if (zeroed && (py > 0 || px > 0)) {
-            data[y_index*width + x_index] = 0;
-          }
-
-          else {
-            data[y_index*width + x_index] = (grid_elem)temp;
-          }
-        }
+      block |= (temp & 0x1) << (7 - (x % 8));
+      if ((x+1) % 8 == 0 || (x+1) == width) {
+        grid_index = (x / 8) + num_cols*y + 1;
+        data[grid_index] = block;
+        grid_index++;
+        block = 0;
       }
     }
   }
+
 
   fclose(input);
 
   grid = new Grid(width, height);
   grid->data = data;
+  grid->num_cols = num_cols;
 }
 
 #define THREAD_DIMX 32
 #define THREAD_DIMY 8
 
-void
-Automaton34_2::run_automaton() {
-
-  // number of threads needed in the x and y directions
-  // note that this is less than the width/height due to the border of unmodified cells
-  int width_cells = grid->width - 2;
+//single update
+void Automaton34_2::update_cells() {
+  int width_cells = grid->num_cols - 2;
   int height_cells = grid->height - 2;
 
   // block/grid size for the pixel kernal
   dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
   dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
               (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
+  kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
+    cudaThreadSynchronize();
+  grid_elem* temp = cuda_device_grid_curr;
+  cuda_device_grid_curr = cuda_device_grid_next;
+  cuda_device_grid_next = temp;
+}
+
+
+void Automaton34_2::run_automaton() {
+  // number of threads needed in the x and y directions
+  // note that this is less than the width/height due to the border of unmodified cells
+  int width_cells = grid->num_cols - 2;
+  int height_cells = grid->height - 2;
+
+   // block/grid size for the pixel kernal
+  dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
+  dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
+              (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
 
   for (int iter = 0; iter < num_iters; iter++) {
     kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
-    cudaThreadSynchronize();
-    //cudaMemcpy(cuda_device_grid_curr, cuda_device_grid_next,
-      //sizeof(grid_elem) * grid->width * grid->height, cudaMemcpyDeviceToDevice);
     grid_elem* temp = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp;
-
   }
 }
+
+void Automaton34_2::set_rule(Rule *_rule) {
+  rule = _rule;
+  return;
+}
+

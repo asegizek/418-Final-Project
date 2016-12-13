@@ -17,6 +17,8 @@ public:
 
   grid_elem* cuda_device_grid_curr;
   grid_elem* cuda_device_grid_next;
+  grid_elem* cuda_device_lookup_table;
+  Rule* rule;
 
 
   Automaton34_2();
@@ -26,9 +28,13 @@ public:
 
   void setup(int num_of_iters);
 
-  void create_grid(char *filename, int pattern_x, int pattern_y, int zeroed);
+  void create_grid(char *filename);
+
+  void update_cells();
 
   void run_automaton();
+
+  void set_rule(Rule* rule);
 
 };
 

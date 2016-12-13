@@ -12,12 +12,62 @@
 
 void startRenderer(Automaton34_2_Serial* automaton, int rows , int cols);
 
+Rule* getRule(char* rule_file) {
+  Rule* rl = new Rule;
+
+  FILE * input = NULL;
+  input = fopen(rule_file, "r");
+  if (!input) {
+    printf("Unable to open file: %s\n", rule_file);
+    printf("\nTerminating program\n");
+    exit(1);
+  }
+  int temp;
+  int n_states;
+  //read number of states
+  if (fscanf(input, "%d\n", &n_states) != 1) {
+    fclose(input);
+    printf("Invalid input\n");
+    printf("\nTerminating program\n");
+    exit(1);
+  }
+  if (n_states > 5) {
+    fclose(input);
+    printf("Rule file has too many states\n");
+    printf("\nTerminating program\n");
+    exit(1);
+  }
+
+  rl->num_states = n_states;
+  rl->next_state = (grid_elem*)malloc(sizeof(grid_elem) * MAX_STATES * 7);
+
+    //populating next state grid
+  for (int i = 0; i < 7 * n_states; i++) {
+    if (fscanf(input, "%d", &temp) != 1) {
+      fclose(input);
+      printf("Rule file %s in unreadable format", rule_file);
+      printf("\nTerminating program\n");
+      exit(1);
+    }
+    rl->next_state[i] = temp;
+  }
+  // fclose(input);
+
+  for (int i = 0; i < 7*n_states; i++) {
+    printf("[%d]: %d\n", i, rl->next_state[i]);
+  }
+  printf("end get rule\n");
+  return rl;
+} 
+
 void usage(const char* progname) {
   printf("Usage: %s [options]\n", progname);
   printf("Program Options:\n");
   printf("  -f  --file   <FILENAME>    Filename of the grid to be used\n");
   printf("  default: default.txt\n");
-  printf("  -i  --iterations <INT>     Number of iterations in automotan\n");
+  printf("  -r --rule    <FILENAME>    Filename of the rule to be used\n");
+  printf("  default: rules/rule342.txt\n");
+  printf("  -i  --iterations <INT>     Number of iterations in automaton\n");
   printf("  default: 1\n");
   printf("  -i  --pattern x <INT>      Number of times grid is repeated in x direction\n");
   printf("  default: 1\n");
@@ -37,6 +87,8 @@ int main(int argc, char** argv)
   char *filename = def;
   char out[] = "output.txt";
   char *output_file = out;
+  char rule_f[] = "rules/rule342.txt";
+  char *rule_file = rule_f;
   int num_of_iters = 1;
   int serial = 0;
   int display = 0;
@@ -55,6 +107,7 @@ int main(int argc, char** argv)
   static struct option long_options[] = {
     {"help",     0, 0,  '?'},
     {"file",     1, 0,  'f'},
+    {"rule",     1, 0, 'r'},
     {"output",     1, 0,  'o'},
     {"iterations",     1, 0,  'i'},
     {"pattern_x",  1, 0, 'x'},
@@ -65,7 +118,7 @@ int main(int argc, char** argv)
     {0 ,0, 0, 0}
   };
 
-  while ((opt = getopt_long(argc, argv, "f:o:i:x:y:?:sz", long_options, NULL)) != EOF) {
+  while ((opt = getopt_long(argc, argv, "f:o:r:i:x:y:?:sz", long_options, NULL)) != EOF) {
 
     switch (opt) {
     case 'f':
@@ -73,6 +126,9 @@ int main(int argc, char** argv)
       break;
     case 'o':
       output_file = optarg;
+      break;
+    case 'r':
+      rule_file = optarg;
       break;
     case 'i':
       num_of_iters = atoi(optarg);
@@ -98,10 +154,12 @@ int main(int argc, char** argv)
   // end parsing of commandline options //////////////////////////////////////
 
   Grid* output_grid;
+  Rule* rule = getRule(rule_file);
   if (!serial) {
     printf("Running parallel version\n");
     Automaton34_2* automaton = new Automaton34_2();
-    automaton->create_grid(filename, pattern_x, pattern_y, zeroed);
+    automaton->set_rule(rule);
+    automaton->create_grid(filename);
     automaton->setup(num_of_iters);
 
     compute_start = clock();

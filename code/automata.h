@@ -2,20 +2,26 @@
 #define __AUTOMATA__
 
 #include "grid.h"
+#include "rule.h"
 
 class Automaton {
 
 public:
 
-    ~Automaton() { };
+    virtual ~Automaton() { };
 
-    Grid* get_grid();
+    virtual Grid* get_grid() = 0;
 
-    void setup();
+    virtual void setup(int num_of_iters) = 0;
 
-    void runAutomaton();
+    virtual void create_grid(char *filename) = 0;
 
-    //virtual void dumpParticles(const char* filename) {}
+    virtual void update_cells() = 0;
+
+    virtual void run_automaton() = 0;
+
+    virtual void set_rule(Rule *rule) = 0;
+
 
 };
 

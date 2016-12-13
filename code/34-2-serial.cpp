@@ -4,6 +4,7 @@
 #include <vector>
 #include "34-2-serial.h"
 
+
 Automaton34_2_Serial::Automaton34_2_Serial() {
   num_iters = 0;
   grid = NULL;
@@ -12,15 +13,13 @@ Automaton34_2_Serial::Automaton34_2_Serial() {
 }
 
 Automaton34_2_Serial::~Automaton34_2_Serial() {
-  if (grid) {
-    delete grid->data;
-    delete grid;
-  }
   if (curr_grid) {
     delete curr_grid;
-  }
-  if (next_grid) {
     delete next_grid;
+  }
+  if (grid) {
+    if (grid->data != curr_grid) delete grid->data;
+    delete grid;
   }
 }
 
@@ -29,6 +28,7 @@ Grid* Automaton34_2_Serial::get_grid() {
   return grid;
 }
 
+
 void Automaton34_2_Serial::setup(int num_of_iters) {
   printf("Number of iterations: %d\n", num_of_iters);
   num_iters = num_of_iters;
@@ -36,6 +36,15 @@ void Automaton34_2_Serial::setup(int num_of_iters) {
   next_grid = new grid_elem[grid->width * grid->height]();
   std::copy(grid->data, grid->data + (grid->width*grid->height), curr_grid);
 }
+
+void Automaton34_2_Serial::set_rule(Rule *_rule) {
+  rule = _rule;
+
+  return;
+}
+
+
+
 
 void Automaton34_2_Serial::create_grid(char *filename) {
   FILE *input = NULL;
@@ -93,10 +102,19 @@ void printGrid(grid_elem* grid, int width, int height) {
 
 void Automaton34_2_Serial::run_automaton() {
   for (int iter = 0; iter < num_iters; iter++) {
-    update_cells();
+    this->update_cells();
+    // printf("updated board is: \n");
+    // for (int y = 0; y < grid->height; y++) {
+    //   for (int x = 0; x < grid->num_cols; x++) {
+    //     grid_elem val = curr_grid[x+grid->num_cols*y];
+    //     printf("%02X ", val);
+    //   }
+    //   printf("\n");
+    // }
     //std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
   }
 }
+
 
 void Automaton34_2_Serial::update_cells() {
   int grid_index;
@@ -110,17 +128,27 @@ void Automaton34_2_Serial::update_cells() {
       grid_index = width*y + x;
       curr_val = curr_grid[grid_index];
       live_neighbors = 0;
+      // int neighbor_offset = 2 * (y % 2) - 1;
+      // int neighbors[] = {grid_index - 1, grid_index + 1, grid_index - width, grid_index + width, 
+      //                grid_index - width + neighbor_offset, grid_index + width + neighbor_offset};
       int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
                          grid_index + width, grid_index + width - 1, grid_index - 1};
       for (int i = 0; i < 6; i++) {
         live_neighbors += curr_grid[neighbors[i]];
       }
 
-      if (!curr_val) {
-        next_val = (live_neighbors == 2);
-      } else {
-        next_val = (live_neighbors == 3 || live_neighbors == 4);
-      }
+      // next_val = 0;
+      // if (!curr_val) {
+      //   next_val = rule->dead[live_neighbors];
+      // } else {
+      //   next_val = rule->alive[live_neighbors];
+      // }
+      next_val = rule->next_state[live_neighbors + curr_val*7];
+      // if (!curr_val) {  
+      //   next_val = (live_neighbors == 2);
+      // } else {
+      //   next_val = (live_neighbors == 3 || live_neighbors == 4);
+      // }
       next_grid[grid_index] = next_val;
     }
   }
@@ -135,6 +163,7 @@ void updateCells(grid_elem* curr_grid, grid_elem* next_grid, int width, int heig
   grid_elem curr_val;
   grid_elem next_val;
   int live_neighbors;
+  //printf("update!!\n");
   for (int y = 1; y < height-1; y++) {
     for (int x = 1; x < width-1; x++) {
       grid_index = width*y + x;
@@ -145,6 +174,7 @@ void updateCells(grid_elem* curr_grid, grid_elem* next_grid, int width, int heig
       for (int i = 0; i < 6; i++) {
         live_neighbors += curr_grid[neighbors[i]];
       }
+
 
       if (!curr_val) {
         next_val = (live_neighbors == 2);

@@ -2,7 +2,8 @@
 #ifndef  __GRID_H__
 #define  __GRID_H__
 
-typedef uint8_t grid_elem;
+//grid element is 1 byte (containing 8 cells)
+typedef unsigned char grid_elem;
 
 struct Grid {
 
@@ -21,6 +22,8 @@ struct Grid {
 
   int width;
   int height;
+  //number of columns in data array is less than the width since cells are packed into bytes
+  int num_cols;
   grid_elem* data;
 };
 
