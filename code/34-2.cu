@@ -3,7 +3,9 @@
 #include <math.h>
 #include <stdio.h>
 #include <vector>
-#include <thrust/scan.h>
+
+#include <thrust/device_malloc.h>
+#include <thrust/device_free.h>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -24,6 +26,10 @@ struct global_constants {
   grid_elem* next_grid;
   grid_elem* lookup_table;
 };
+
+thrust::device_ptr<grid_elem> cuda_device_grid_curr;
+thrust::device_ptr<grid_elem> cuda_device_grid_next;
+thrust::device_ptr<grid_elem> cuda_device_lookup_table;
 
 // Global variable that is in scope, but read-only, for all cuda
 // kernels.  The __constant__ modifier designates this variable will
@@ -131,20 +137,15 @@ grid_elem* create_lookup_table(grid_elem* next_state) {
 Automaton34_2::Automaton34_2() {
   num_iters = 0;
   grid = NULL;
-  cuda_device_grid_curr = NULL;
-  cuda_device_grid_next = NULL;
-  cuda_device_lookup_table = NULL;
 }
 
 Automaton34_2::~Automaton34_2() {
   if (grid) {
     delete grid->data;
     delete grid;
-  }
-  if (cuda_device_grid_curr) {
-    cudaFree(cuda_device_grid_curr);
-    cudaFree(cuda_device_grid_next);
-    cudaFree(cuda_device_lookup_table);
+    thrust::device_free(cuda_device_grid_curr);
+    thrust::device_free(cuda_device_grid_next);
+    thrust::device_free(cuda_device_lookup_table);
   }
 }
 
@@ -156,7 +157,7 @@ Automaton34_2::get_grid() {
 
 
   cudaMemcpy(grid->data,
-             cuda_device_grid_curr,
+             cuda_device_grid_curr.get(),
              sizeof(grid_elem) * grid->num_cols * grid->height,
              cudaMemcpyDeviceToHost);
   Grid *unpacked = new Grid(grid->width+2, grid->height);
@@ -225,23 +226,23 @@ Automaton34_2::setup(int num_of_iters) {
   //create lookup table
   grid_elem* lookup_table = create_lookup_table(rule->next_state);
 
-  cudaMalloc(&cuda_device_grid_curr, sizeof(grid_elem) * grid->num_cols * grid->height);
-  cudaMalloc(&cuda_device_grid_next, sizeof(grid_elem) * grid->num_cols* grid->height);
-  cudaMalloc(&cuda_device_lookup_table, sizeof(grid_elem) * (1 << 16));
+  cuda_device_grid_curr = thrust::device_malloc<grid_elem>(grid->num_cols * grid->height);
+  cuda_device_grid_next = thrust::device_malloc<grid_elem>(grid->num_cols * grid->height);
+  cuda_device_lookup_table = thrust::device_malloc<grid_elem>(1 << 16);
 
-  cudaMemcpy(cuda_device_grid_curr, grid->data,
+  cudaMemcpy(cuda_device_grid_curr.get(), grid->data,
               sizeof(grid_elem) * grid->num_cols * grid->height, cudaMemcpyHostToDevice);
-  cudaMemset(cuda_device_grid_next, 0, sizeof(grid_elem) * grid->num_cols * grid->height);
-  cudaMemcpy(cuda_device_lookup_table, lookup_table, sizeof(grid_elem) * (1 << 16), cudaMemcpyHostToDevice);
+  thrust::fill(cuda_device_grid_next, cuda_device_grid_next + grid->width*grid->height, 0);
+  cudaMemcpy(cuda_device_lookup_table.get(), lookup_table, sizeof(grid_elem) * (1 << 16), cudaMemcpyHostToDevice);
 
   // Initialize parameters in constant memory.
   global_constants params;
   params.grid_height = grid->height;
   params.grid_width = grid->width;
   params.num_cols = grid->num_cols;
-  params.curr_grid = cuda_device_grid_curr;
-  params.next_grid = cuda_device_grid_next;
-  params.lookup_table = cuda_device_lookup_table;
+  params.curr_grid = cuda_device_grid_curr.get();
+  params.next_grid = cuda_device_grid_next.get();
+  params.lookup_table = cuda_device_lookup_table.get();
   cudaMemcpyToSymbol(const_params, &params, sizeof(global_constants));
 }
 
@@ -359,9 +360,9 @@ void Automaton34_2::update_cells() {
   dim3 cell_block_dim(THREAD_DIMX, THREAD_DIMY);
   dim3 cell_grid_dim((width_cells + cell_block_dim.x - 1) / cell_block_dim.x,
               (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
-  kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
+  kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr.get(), cuda_device_grid_next.get());
     cudaThreadSynchronize();
-  grid_elem* temp = cuda_device_grid_curr;
+  thrust::device_ptr<grid_elem> temp = cuda_device_grid_curr;
   cuda_device_grid_curr = cuda_device_grid_next;
   cuda_device_grid_next = temp;
 }
@@ -379,8 +380,8 @@ void Automaton34_2::run_automaton() {
               (height_cells + cell_block_dim.y - 1) / cell_block_dim.y);
 
   for (int iter = 0; iter < num_iters; iter++) {
-    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr, cuda_device_grid_next);
-    grid_elem* temp = cuda_device_grid_curr;
+    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>( cuda_device_grid_curr.get(), cuda_device_grid_next.get());
+    thrust::device_ptr<grid_elem> temp = cuda_device_grid_curr;
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp;
   }
