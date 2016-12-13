@@ -53,10 +53,6 @@ Rule* getRule(char* rule_file) {
   }
   // fclose(input);
 
-  for (int i = 0; i < 7*n_states; i++) {
-    printf("[%d]: %d\n", i, rl->next_state[i]);
-  }
-  printf("end get rule\n");
   return rl;
 } 
 
