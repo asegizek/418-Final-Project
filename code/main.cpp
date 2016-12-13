@@ -187,6 +187,7 @@ int main(int argc, char** argv)
   else {
     printf("Running serial version\n");
     Automaton34_2_Serial* a = new Automaton34_2_Serial();
+    a->set_rule(rule);
     a->create_grid(filename);
     a->setup(num_of_iters);
     if (display) {
