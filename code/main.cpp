@@ -58,7 +58,7 @@ Rule* getRule(char* rule_file) {
   }
   printf("end get rule\n");
   return rl;
-} 
+}
 
 void usage(const char* progname) {
   printf("Usage: %s [options]\n", progname);
@@ -159,7 +159,7 @@ int main(int argc, char** argv)
     printf("Running parallel version\n");
     Automaton34_2* automaton = new Automaton34_2();
     automaton->set_rule(rule);
-    automaton->create_grid(filename);
+    automaton->create_grid(filename, pattern_x, pattern_y, zeroed);
     automaton->setup(num_of_iters);
 
     compute_start = clock();
@@ -187,7 +187,7 @@ int main(int argc, char** argv)
   else {
     printf("Running serial version\n");
     Automaton34_2_Serial* a = new Automaton34_2_Serial();
-    a->create_grid(filename);
+    a->create_grid(filename, 1, 1, 0);
     a->setup(num_of_iters);
     if (display) {
       glutInit(&argc, argv);

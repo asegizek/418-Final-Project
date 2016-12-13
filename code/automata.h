@@ -14,7 +14,7 @@ public:
 
     virtual void setup(int num_of_iters) = 0;
 
-    virtual void create_grid(char *filename) = 0;
+    virtual void create_grid(char *filename, int pattern_x, int pattern_y, int zeroed) = 0;
 
     virtual void update_cells() = 0;
 

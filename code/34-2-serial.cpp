@@ -46,7 +46,8 @@ void Automaton34_2_Serial::set_rule(Rule *_rule) {
 
 
 
-void Automaton34_2_Serial::create_grid(char *filename) {
+  void create_grid(char *filename, int pattern_x, int pattern_y, int zeroed);
+void Automaton34_2_Serial::create_grid(char *filename, int pattern_x, int pattern_y, int zeroed) {
   FILE *input = NULL;
   int width, height;
   grid_elem *data;
@@ -129,7 +130,7 @@ void Automaton34_2_Serial::update_cells() {
       curr_val = curr_grid[grid_index];
       live_neighbors = 0;
       // int neighbor_offset = 2 * (y % 2) - 1;
-      // int neighbors[] = {grid_index - 1, grid_index + 1, grid_index - width, grid_index + width, 
+      // int neighbors[] = {grid_index - 1, grid_index + 1, grid_index - width, grid_index + width,
       //                grid_index - width + neighbor_offset, grid_index + width + neighbor_offset};
       int neighbors[] = {grid_index - width, grid_index - width + 1, grid_index + 1,
                          grid_index + width, grid_index + width - 1, grid_index - 1};
@@ -144,7 +145,7 @@ void Automaton34_2_Serial::update_cells() {
       //   next_val = rule->alive[live_neighbors];
       // }
       next_val = rule->next_state[live_neighbors + curr_val*7];
-      // if (!curr_val) {  
+      // if (!curr_val) {
       //   next_val = (live_neighbors == 2);
       // } else {
       //   next_val = (live_neighbors == 3 || live_neighbors == 4);

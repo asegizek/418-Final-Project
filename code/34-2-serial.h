@@ -15,7 +15,7 @@ class Automaton34_2_Serial: public Automaton{
         virtual ~Automaton34_2_Serial();
         Grid* get_grid();
         void setup(int num_of_iters);
-        void create_grid(char *filename);
+        void create_grid(char *filename, int pattern_x, int pattern_y, int zeroed);
         void update_cells();
         void run_automaton();
         void set_rule(Rule *rule);
