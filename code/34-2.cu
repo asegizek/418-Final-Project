@@ -18,6 +18,7 @@
 #include <thrust/sort.h>
 #include <thrust/unique.h>
 #include <thrust/remove.h>
+#include <thrust/scan.h>
 
 #include <ctime>
 
@@ -114,9 +115,6 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
         next_value = (live_neighbors == 3 || live_neighbors == 4);
       }
 
-      if (pos_x == 1 && pos_y == 1 && next_value != 0)
-        next_value = 7;
-
       //const_params.next_grid[grid_index] = next_value;
       next_grid[grid_index] = next_value;
 
@@ -125,17 +123,41 @@ __global__ void kernel_single_iteration(grid_elem* curr_grid, grid_elem* next_gr
         // add neighbors
         for (int i = 0; i < NUM_NEIGHBORS; i++) {
           size_t neighbor_index = neighbors[i];
-          active_grid[neighbor_index] = neighbor_index;
+          active_grid[neighbor_index] = 1;
         }
 
         // add yourself
-        active_grid[grid_index] = grid_index;
+        active_grid[grid_index] = 1;
       }
 
     }
   }
 }
 
+// kernel_create_active_list (CUDA device code)
+//
+// creates the active list using the active grid
+__global__ void kernel_create_active_list(active_list_t* active_grid,
+                                          active_list_t* active_list){
+
+  size_t grid_index = blockIdx.x*blockDim.x + threadIdx.x;
+
+  int width = const_params.grid_width;
+  int height = const_params.grid_width;
+
+  // only operate on values inside the grid
+  if (grid_index < width*height) {
+
+    active_list_t grid_val = active_grid[grid_index];
+    // if the value in the next index is one greater, the value at this index is active
+    if (grid_val < active_grid[grid_index + 1]) {
+
+      // the value of this index to the active list
+      active_list[grid_val] = grid_index;
+
+    }
+  }
+}
 
 Automaton34_2::Automaton34_2() {
   num_iters = 0;
@@ -316,7 +338,10 @@ Automaton34_2::create_grid(char *filename, int pattern_x, int pattern_y, int zer
 
 #define THREAD_DIMX 32
 #define THREAD_DIMY 8
+#define ITER_DIM 256
+
 #define THREAD_DIM 256
+#define CRT_ALIST_DIM 256
 
 void
 Automaton34_2::run_automaton() {
@@ -329,7 +354,8 @@ Automaton34_2::run_automaton() {
       = thrust::device_malloc<active_list_t>(active_list_space);
 
   // allocate space for the grid of active cells
-  size_t active_grid_space = grid->width*grid->height;
+  // 1 is added to the total grid space to facilitate with the exclusive scan
+  size_t active_grid_space = grid->width*grid->height + 1;
   thrust::device_ptr<active_list_t> active_grid
       = thrust::device_malloc<active_list_t>(active_grid_space);
 
@@ -340,8 +366,8 @@ Automaton34_2::run_automaton() {
   thrust::sequence(active_list, active_list + active_list_size);
 
   // block/grid size for the pixel kernel
-  dim3 cell_block_dim(THREAD_DIM);
-  dim3 cell_grid_dim;
+  dim3 iter_block_dim(ITER_DIM);
+  dim3 iter_grid_dim;
 
   // used for timing
   //time_t a_start, a_end, b_start, b_end;
@@ -350,6 +376,7 @@ Automaton34_2::run_automaton() {
 
   for (int iter = 0; iter < num_iters; iter++) {
 
+    //print("list size: %d\n", active_list_size;
     //a_start = clock();
 
     // zero out the new grid
@@ -357,21 +384,32 @@ Automaton34_2::run_automaton() {
                   + grid->width*grid->height, 0);
 
     // zero out the active_grid
-    thrust::fill(active_grid, active_grid + active_grid_space, ALIST_BLANK);
+    thrust::fill(active_grid, active_grid + active_grid_space, 0);
 
     // reset the grid dimensions to reflect the new number of values which must be
     // computed on
-    cell_grid_dim = dim3((active_list_size + cell_block_dim.x - 1) / cell_block_dim.x);
+    iter_grid_dim = dim3((active_list_size + iter_block_dim.x - 1) / iter_block_dim.x);
 
-    kernel_single_iteration<<<cell_grid_dim, cell_block_dim>>>
+    kernel_single_iteration<<<iter_grid_dim, iter_block_dim>>>
                       (cuda_device_grid_curr.get(), cuda_device_grid_next.get(),
                        active_list.get(), active_grid.get(), active_list_size);
     cudaThreadSynchronize();
 
-    // copy all the active cells in the grid into the active list
-    thrust::device_ptr<active_list_t> new_end_remove = thrust::remove_copy(active_grid,
-                              active_grid + active_grid_space, active_list, ALIST_BLANK);
-    active_list_size = new_end_remove - active_list;
+    thrust::exclusive_scan(active_grid, active_grid + active_grid_space, active_grid);
+
+    dim3 alist_block_dim(CRT_ALIST_DIM);
+    dim3 alist_grid_dim = dim3((grid->width*grid->height + alist_block_dim.x - 1)
+                                / alist_block_dim.x);
+
+    // create the active list using the active grid
+    kernel_create_active_list<<<alist_grid_dim, alist_grid_dim>>>
+      (active_grid.get(), active_list.get());
+
+    // copy in the new size of the active list from the last value in the active grid
+    active_list_t new_size;
+    cudaMemcpy(&new_size, (active_grid + grid->width*grid->height).get(),
+              sizeof(active_list_t) * 1, cudaMemcpyDeviceToHost);
+    active_list_size = new_size;
 
     // swap the current and next pointers for the next iteration
     // this gets rid of the need to copy values between the 2 grids
@@ -379,6 +417,8 @@ Automaton34_2::run_automaton() {
     cuda_device_grid_curr = cuda_device_grid_next;
     cuda_device_grid_next = temp1;
 
+    //b_start = clock();
+    //b_end = clock();
     //a_end = clock();
     //a_tot += a_end - a_start;
     //b_tot += b_end - b_start;
