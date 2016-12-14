@@ -64,7 +64,7 @@ void Automaton34_2_Serial::create_grid(char *filename) {
     printf("Invalid input\n");
     printf("\nTerminating program\n");
     exit(1);
-  }
+  } 
        // increase grid size to account for border cells
   width += 2;
   height += 2;
@@ -103,6 +103,7 @@ void printGrid(grid_elem* grid, int width, int height) {
 void Automaton34_2_Serial::run_automaton() {
   for (int iter = 0; iter < num_iters; iter++) {
     this->update_cells();
+
     // printf("updated board is: \n");
     // for (int y = 0; y < grid->height; y++) {
     //   for (int x = 0; x < grid->num_cols; x++) {
@@ -111,7 +112,6 @@ void Automaton34_2_Serial::run_automaton() {
     //   }
     //   printf("\n");
     // }
-    //std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
   }
 }
 
@@ -152,7 +152,9 @@ void Automaton34_2_Serial::update_cells() {
       next_grid[grid_index] = next_val;
     }
   }
-  std::copy(next_grid, next_grid + (grid->width*grid->height), curr_grid);
+  grid_elem* temp = curr_grid;
+  curr_grid = next_grid;
+  next_grid = temp;
 }
 
 

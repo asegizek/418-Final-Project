@@ -201,7 +201,7 @@ int main(int argc, char** argv)
     int width = output_grid->width;
 
   // write to output file
-    FILE *output = fopen("output-serial.txt", "w");
+    FILE *output = fopen(output_file, "w");
     fprintf(output, "%d %d\n", width - 2, height - 2);
     for (int y = 1; y < height - 1; y++) {
       for (int x = 1; x < width - 1; x++) {
