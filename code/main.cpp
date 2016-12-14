@@ -1,14 +1,17 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <iostream>
 #include <getopt.h>
 #include <string>
 #include <algorithm>
 #include <ctime>
-
+#include <ratio>
+#include <chrono>
 #include "platformgl.h"
 #include "parallel-automaton.h"
 #include "serial-automaton.h"
 
+using namespace std::chrono;
 
 void startRenderer(Automaton* automaton, int rows , int cols);
 
@@ -96,7 +99,6 @@ int main(int argc, char** argv)
 
   // used to get time infromation
   time_t total_start, total_end;
-  time_t compute_start, compute_end;
 
   total_start = clock();
 
@@ -176,9 +178,9 @@ int main(int argc, char** argv)
     startRenderer(automaton, height, width);
     return 0;
   }
-  compute_start = clock();
+  high_resolution_clock::time_point c_start = high_resolution_clock::now();
   automaton->run_automaton();
-  compute_end = clock();
+  high_resolution_clock::time_point c_end = high_resolution_clock::now();
   output_grid = automaton->get_grid();
   height = output_grid->height;
   width = output_grid->width;
@@ -199,9 +201,11 @@ int main(int argc, char** argv)
   total_end = clock();
 
   double total_time = double(total_end - total_start) / CLOCKS_PER_SEC;
-  double compute_time = double(compute_end - compute_start) / CLOCKS_PER_SEC;
+  duration<double> compute_time = duration_cast<duration<double>>(c_end - c_start);
+
   printf("total time: %f s\n", total_time);
-  printf("compute time: %f s\n", compute_time);
+  std::cout << "compute time: " << compute_time.count() << " seconds." << std::endl;
+
   printf("done\n");
   return 0;
 
