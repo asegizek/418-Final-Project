@@ -1,11 +1,11 @@
 
 EXECUTABLE := automata
 
-CU_FILES   := 34-2.cu
+CU_FILES   := parallel-automaton.cu
 
 CU_DEPS    :=
 
-CC_FILES   := main.cpp 34-2-serial.cpp display.cpp
+CC_FILES   := main.cpp serial-automaton.cpp display.cpp
 
 
 LOGS	   := logs
@@ -38,7 +38,7 @@ LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS))
 
 NVCC=nvcc
 
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/34-2.o $(OBJDIR)/34-2-serial.o $(OBJDIR)/display.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/parallel-automaton.o $(OBJDIR)/serial-automaton.o $(OBJDIR)/display.o
 
 
 .PHONY: dirs clean

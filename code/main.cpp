@@ -6,11 +6,11 @@
 #include <ctime>
 
 #include "platformgl.h"
-#include "34-2.h"
-#include "34-2-serial.h"
+#include "parallel-automaton.h"
+#include "serial-automaton.h"
 
 
-void startRenderer(Automaton34_2_Serial* automaton, int rows , int cols);
+void startRenderer(Automaton* automaton, int rows , int cols);
 
 Rule* getRule(char* rule_file) {
   Rule* rl = new Rule;
@@ -70,8 +70,8 @@ void usage(const char* progname) {
   printf("  -i  --pattern y <INT>      Number of times grid is repeated in y direction\n");
   printf("  default: 1\n");
   printf("  -z  --zeroed patterns      All the patterns are zeroed out\n");
-  //printf("  -s --serial                 Run serial implementation\n");
-  //printf("  -d --display                Run in display mode\n");
+  printf("  -s --serial                 Run serial implementation\n");
+  printf("  -d --display                Run in display mode\n");
   printf("  -?  --help                 This message\n");
 }
 
@@ -114,7 +114,7 @@ int main(int argc, char** argv)
     {0 ,0, 0, 0}
   };
 
-  while ((opt = getopt_long(argc, argv, "f:o:r:i:x:y:?:sz", long_options, NULL)) != EOF) {
+  while ((opt = getopt_long(argc, argv, "f:o:r:i:x:y:?:sdz", long_options, NULL)) != EOF) {
 
     switch (opt) {
     case 'f':
@@ -131,6 +131,9 @@ int main(int argc, char** argv)
       break;
     case 's':
       serial = 1;
+      break;
+    case 'd':
+      display = 1;
       break;
     case 'x':
       pattern_x = atoi(optarg);
@@ -149,25 +152,40 @@ int main(int argc, char** argv)
   }
   // end parsing of commandline options //////////////////////////////////////
 
-  Grid* output_grid;
   Rule* rule = getRule(rule_file);
-  if (!serial) {
-    printf("Running parallel version\n");
-    Automaton34_2* automaton = new Automaton34_2();
-    automaton->set_rule(rule);
-    automaton->create_grid(filename);
-    automaton->setup(num_of_iters);
+  Automaton* automaton;
 
-    compute_start = clock();
-    automaton->run_automaton();
-    compute_end = clock();
 
-    output_grid = automaton->get_grid();
-    int height = output_grid->height;
-    int width = output_grid->width;
+  if (serial) {
+    printf("Running serial implementation\n");
+    automaton = new SerialAutomaton();
+  } else {
+    printf("Running parallel implementation\n");
+    automaton = new ParallelAutomaton();
+  }
+  automaton->set_rule(rule);
 
-  // write to output file
-    FILE *output = fopen(output_file, "w");
+  automaton->create_grid(filename);
+  automaton->setup(num_of_iters);
+
+  Grid* output_grid = automaton->get_grid();
+  int height = output_grid->height;
+  int width = output_grid->width;
+  if (display) {
+    glutInit(&argc, argv);
+    startRenderer(automaton, height, width);
+    return 0;
+  }
+  compute_start = clock();
+  automaton->run_automaton();
+  compute_end = clock();
+  output_grid = automaton->get_grid();
+  height = output_grid->height;
+  width = output_grid->width;
+
+
+
+  FILE *output = fopen(output_file, "w");
     fprintf(output, "%d %d\n", width - 2, height - 2);
     for (int y = 1; y < height - 1; y++) {
       for (int x = 1; x < width - 1; x++) {
@@ -177,42 +195,6 @@ int main(int argc, char** argv)
       fprintf(output, "\n");
     }
     fclose(output);
-    delete automaton;
-  }
-
-  else {
-    printf("Running serial version\n");
-    Automaton34_2_Serial* a = new Automaton34_2_Serial();
-    a->set_rule(rule);
-    a->create_grid(filename);
-    a->setup(num_of_iters);
-    if (display) {
-      glutInit(&argc, argv);
-      startRenderer(a, a->grid->width, a->grid->height);
-      return 0;
-    }
-
-    compute_start = clock();
-    a->run_automaton();
-    compute_end = clock();
-
-    output_grid = a->get_grid();
-    int height = output_grid->height;
-    int width = output_grid->width;
-
-  // write to output file
-    FILE *output = fopen(output_file, "w");
-    fprintf(output, "%d %d\n", width - 2, height - 2);
-    for (int y = 1; y < height - 1; y++) {
-      for (int x = 1; x < width - 1; x++) {
-        grid_elem val = output_grid->data[y*width + x];
-        fprintf(output, "%u ", val);
-      }
-      fprintf(output, "\n");
-    }
-    fclose(output);
-  }
-
 
   total_end = clock();
 
@@ -222,4 +204,76 @@ int main(int argc, char** argv)
   printf("compute time: %f s\n", compute_time);
   printf("done\n");
   return 0;
+
+  // if (!serial) {
+  //   printf("Running parallel version\n");
+  //   Automaton34_2* automaton = new Automaton34_2();
+  //   automaton->set_rule(rule);
+  //   automaton->create_grid(filename);
+  //   automaton->setup(num_of_iters);
+
+  //   compute_start = clock();
+  //   automaton->run_automaton();
+  //   compute_end = clock();
+
+  //   output_grid = automaton->get_grid();
+  //   int height = output_grid->height;
+  //   int width = output_grid->width;
+
+  // // write to output file
+  //   FILE *output = fopen(output_file, "w");
+  //   fprintf(output, "%d %d\n", width - 2, height - 2);
+  //   for (int y = 1; y < height - 1; y++) {
+  //     for (int x = 1; x < width - 1; x++) {
+  //       grid_elem val = output_grid->data[y*width + x];
+  //       fprintf(output, "%u ", val);
+  //     }
+  //     fprintf(output, "\n");
+  //   }
+  //   fclose(output);
+  //   delete automaton;
+  // }
+
+  // else {
+  //   printf("Running serial version\n");
+  //   Automaton34_2_Serial* a = new Automaton34_2_Serial();
+  //   a->set_rule(rule);
+  //   a->create_grid(filename);
+  //   a->setup(num_of_iters);
+  //   if (display) {
+  //     glutInit(&argc, argv);
+  //     startRenderer(a, a->grid->width, a->grid->height);
+  //     return 0;
+  //   }
+
+  //   compute_start = clock();
+  //   a->run_automaton();
+  //   compute_end = clock();
+
+  //   output_grid = a->get_grid();
+  //   int height = output_grid->height;
+  //   int width = output_grid->width;
+
+  // // write to output file
+  //   FILE *output = fopen(output_file, "w");
+  //   fprintf(output, "%d %d\n", width - 2, height - 2);
+  //   for (int y = 1; y < height - 1; y++) {
+  //     for (int x = 1; x < width - 1; x++) {
+  //       grid_elem val = output_grid->data[y*width + x];
+  //       fprintf(output, "%u ", val);
+  //     }
+  //     fprintf(output, "\n");
+  //   }
+  //   fclose(output);
+  // }
+
+
+  // total_end = clock();
+
+  // double total_time = double(total_end - total_start) / CLOCKS_PER_SEC;
+  // double compute_time = double(compute_end - compute_start) / CLOCKS_PER_SEC;
+  // printf("total time: %f s\n", total_time);
+  // printf("compute time: %f s\n", compute_time);
+  // printf("done\n");
+  // return 0;
 }
